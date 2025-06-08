@@ -52,109 +52,76 @@ app.post('/api/order', async (req, res) => {
 app.use('/admin', basicAuth({
   users: { 'admin': '123456' },
   challenge: true,
-  unauthorizedResponse: 'غير مصرح'
-}));
-
-// صفحة عرض الطلبات
-app.get('/admin', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-    const rows = result.rows.map(order => `
-      <tr>
-        <td>${order.name}</td>
-        <td>${order.phone}</td>
-        <td>${order.device}</td>
-        <td>${order.cash_price}</td>
-        <td>${order.installment_price}</td>
-        <td>${order.monthly}</td>
-        <td>${order.order_code}</td>
-        <td>${new Date(order.created_at).toLocaleString()}</td>
-      </tr>
-    `).join('');
-
-    res.send(`
+  realm: '4 STORE',
+  unauthorizedResponse: (req) => {
+    return `
       <html lang="ar" dir="rtl">
         <head>
-          <meta charset="UTF-8" />
-          <title>لوحة إدارة الطلبات</title>
+          <meta charset="UTF-8">
+          <title>تسجيل الدخول - 4 STORE</title>
           <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
           <style>
             body {
               font-family: 'Almarai', sans-serif;
+              background: linear-gradient(135deg, #4b1c78, #7e3cff);
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
               margin: 0;
-              padding: 30px;
-              background: #f5f7fa;
-              color: #333;
-              direction: rtl;
+              color: #fff;
             }
-            h1 {
-              text-align: center;
-              color: #3b0a77;
-              margin-bottom: 30px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
+            .container {
               background: #fff;
-              border-radius: 10px;
-              overflow: hidden;
-              box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-            }
-            th, td {
-              padding: 15px;
+              color: #333;
+              padding: 30px;
+              border-radius: 12px;
+              box-shadow: 0 10px 25px rgba(0,0,0,0.2);
               text-align: center;
-              border-bottom: 1px solid #eee;
-              font-size: 15px;
+              max-width: 400px;
+              width: 100%;
             }
-            th {
-              background-color: #3b0a77;
-              color: white;
+            h2 {
+              margin-bottom: 20px;
+              color: #4b1c78;
+            }
+            input {
+              width: 100%;
+              padding: 12px;
+              margin-bottom: 15px;
+              border: 1px solid #ccc;
+              border-radius: 8px;
               font-size: 16px;
             }
-            tr:hover {
-              background-color: #f0f0f0;
-            }
             button {
-              display: block;
-              margin: 0 auto 20px;
-              padding: 10px 25px;
-              font-size: 15px;
-              background-color: #3b0a77;
-              color: white;
+              width: 100%;
+              padding: 12px;
+              background-color: #4b1c78;
+              color: #fff;
               border: none;
-              border-radius: 6px;
+              font-size: 16px;
+              border-radius: 8px;
               cursor: pointer;
+              transition: 0.3s;
+            }
+            button:hover {
+              background-color: #6334a5;
             }
           </style>
         </head>
         <body>
-          <h1>طلبات iPhone</h1>
-          <button onclick="location.reload()">🔄 تحديث الطلبات</button>
-          <table>
-            <thead>
-              <tr>
-                <th>الاسم</th>
-                <th>الجوال</th>
-                <th>الجهاز</th>
-                <th>السعر كاش</th>
-                <th>السعر تقسيط</th>
-                <th>القسط الشهري</th>
-                <th>كود الطلب</th>
-                <th>الوقت</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+          <div class="container">
+            <h2>تسجيل الدخول</h2>
+            <p>يرجى إدخال اسم المستخدم وكلمة المرور</p>
+            <form>
+              <input type="text" placeholder="اسم المستخدم" disabled>
+              <input type="password" placeholder="كلمة المرور" disabled>
+              <button disabled>تسجيل الدخول</button>
+            </form>
+            <p style="color: red; margin-top: 10px;">بيانات الدخول غير صحيحة</p>
+          </div>
         </body>
       </html>
-    `);
-  } catch (err) {
-    console.error('Admin page error:', err);
-    res.status(500).send('حدث خطأ أثناء جلب الطلبات');
+    `;
   }
-});
-
-// تشغيل الخادم
-app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
-});
+}));
