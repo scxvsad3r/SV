@@ -70,9 +70,22 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
+  const discordWebhookUrl = 'https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z';
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
     req.session.authenticated = true;
+    if (username === 'admin' && password === 'dev2008') {
+  req.session.authenticated = true;
+  req.session.username = 'سامر عبدالله';
+
+  // 🔔 إشعار دخول الأدمن إلى Discord
+  const timestamp = new Date().toLocaleString('ar-EG', { hour12: true, timeZone: 'Asia/Riyadh' });
+  axios.post(discordWebhookUrl, {
+    content: `📥 **تم تسجيل دخول الأدمن**\n👤 الاسم: سامر عبدالله\n🕒 الوقت: ${timestamp}`
+  }).catch(err => console.error('فشل إرسال الإشعار إلى Discord:', err));
+
+  res.redirect('/admin');
+}
     req.session.username = 'سامر عبدالله';
     res.redirect('/admin');
   } else {
