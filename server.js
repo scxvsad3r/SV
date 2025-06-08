@@ -13,7 +13,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء الجدول إذا ما كان موجود
+// إنشاء جدول الطلبات إذا لم يكن موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -32,16 +32,17 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// جلسة تسجيل الدخول
+// إعداد الجلسة: تنتهي عند إغلاق المتصفح
 app.use(session({
   secret: 'secret-key',
   resave: false,
   saveUninitialized: true,
   cookie: {
-    secure: true, // غيّر إلى true إذا كنت تستخدم HTTPS
+    secure: false, // true إذا كان HTTPS
     httpOnly: true
   }
 }));
+
 // صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
@@ -268,7 +269,7 @@ app.get('/admin', async (req, res) => {
   }
 });
 
-// استلام الطلب من نموذج HTML
+// استقبال الطلب من صفحة HTML
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
 
