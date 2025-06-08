@@ -84,6 +84,99 @@ app.get('/admin/login', (req, res) => {
           cursor: pointer;
           width: 100%;
         }
+
+    @import url('https://fonts.googleapis.com/css2?family=Almarai:wght@800&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Almarai', sans-serif;
+      background: linear-gradient(135deg, #2c003e, #1a002f);
+      color: #fff8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 30px;
+    }
+    .login-container {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #a478ff50;
+      border-radius: 24px;
+      padding: 50px 40px;
+      width: 100%;
+      max-width: 450px;
+      box-shadow: 0 0 40px #b58cff44;
+      text-align: center;
+      animation: fadeIn 1.2s ease-in;
+    }
+    @keyframes fadeIn {
+      from {opacity: 0; transform: translateY(30px);}
+      to {opacity: 1; transform: translateY(0);}
+    }
+    .login-container h2 {
+      font-size: 2.2rem;
+      margin-bottom: 30px;
+      color: gold;
+    }
+    .input-group {
+      position: relative;
+      margin-bottom: 30px;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 15px 50px 15px 20px;
+      border: 1px solid gold;
+      background-color: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 1rem;
+      border-radius: 12px;
+      outline: none;
+      transition: 0.3s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: #ffd700;
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+    .toggle-password {
+      position: absolute;
+      top: 50%;
+      left: 15px;
+      transform: translateY(-50%);
+      cursor: pointer;
+      width: 26px;
+      height: 26px;
+      fill: gold;
+      transition: fill 0.3s ease;
+    }
+    .toggle-password:hover {
+      fill: #fff4c4;
+    }
+    button {
+      background-color: gold;
+      color: #2e003b;
+      border: none;
+      padding: 15px;
+      width: 100%;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: 0.3s ease;
+      box-shadow: 0 0 20px #ffdd88aa;
+    }
+    button:hover {
+      background-color: #fff4c4;
+      box-shadow: 0 0 30px #ffeaa8;
+    }
+    .error {
+      margin-top: 10px;
+      color: #ffaaaa;
+      font-weight: bold;
+      font-size: 0.95rem;
+      min-height: 24px;
+    }
+
+
+        
       </style>
     </head>
     <body>
