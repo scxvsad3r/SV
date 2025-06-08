@@ -1,19 +1,18 @@
 const express = require('express');
-const basicAuth = require('express-basic-auth');
+const session = require('express-session');
 const { Pool } = require('pg');
 const bodyParser = require('body-parser');
-const cors = require('cors');
+const path = require('path');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// الاتصال بقاعدة البيانات
 const pool = new Pool({
-  connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات (مرة واحدة فقط)
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -28,49 +27,70 @@ pool.query(`
   )
 `);
 
-app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// استقبال الطلب من نموذج HTML
-app.post('/api/order', async (req, res) => {
-  const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-
-  try {
-    await pool.query(
-      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [name, phone, device, cashPrice, installmentPrice, monthly, code]
-    );
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error('Database error:', err);
-    res.status(500).json({ error: 'DB error' });
-  }
-});
-
-// مسار لحذف الطلب
-app.delete('/api/delete/:id', async (req, res) => {
-  const id = req.params.id;
-  try {
-    await pool.query('DELETE FROM orders WHERE id = $1', [id]);
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error('Delete error:', err);
-    res.status(500).json({ error: 'خطأ في حذف الطلب' });
-  }
-});
-
-// حماية صفحة الإدارة بكلمة مرور
-app.use('/admin', basicAuth({
-  users: { 'admin': 'dev2008' },
-  challenge: true,
-  unauthorizedResponse: 'غير مصرح'
+app.use(session({
+  secret: 'secret4store',
+  resave: false,
+  saveUninitialized: false
 }));
 
-// صفحة عرض الطلبات
+// تسجيل الدخول
+app.get('/login', (req, res) => {
+  res.send(`
+    <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8" />
+        <title>تسجيل الدخول</title>
+        <style>
+          body { font-family: 'Tahoma', sans-serif; background: #f3f3f3; display: flex; justify-content: center; align-items: center; height: 100vh; }
+          .login-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); width: 300px; text-align: center; }
+          input { width: 100%; margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+          button { background: #3b0a77; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        </style>
+      </head>
+      <body>
+        <form class="login-box" method="POST" action="/login">
+          <h2>تسجيل الدخول</h2>
+          <input type="text" name="username" placeholder="اسم المستخدم" required />
+          <input type="password" name="password" placeholder="كلمة المرور" required />
+          <button type="submit">دخول</button>
+        </form>
+      </body>
+    </html>
+  `);
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'admin' && password === process.env.ADMIN_PASSWORD) {
+    req.session.authenticated = true;
+    res.redirect('/admin');
+  } else {
+    res.send('<script>alert("بيانات غير صحيحة"); window.location.href="/login";</script>');
+  }
+});
+
+// تسجيل الخروج
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.redirect('/login');
+  });
+});
+
+// صفحة الإدارة مع البحث
 app.get('/admin', async (req, res) => {
+  if (!req.session.authenticated) return res.redirect('/login');
+
+  const q = req.query.q || '';
   try {
-    const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+    const result = await pool.query(`
+      SELECT * FROM orders
+      WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
+      ORDER BY created_at DESC
+    `, [`%${q}%`]);
+
     const rows = result.rows.map(order => `
       <tr>
         <td>${order.name}</td>
@@ -81,9 +101,7 @@ app.get('/admin', async (req, res) => {
         <td>${order.monthly}</td>
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString()}</td>
-        <td>
-          <button onclick="deleteOrder(${order.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">حذف</button>
-        </td>
+        <td><button onclick="deleteOrder(${order.id})" style="background:red; color:white;">حذف</button></td>
       </tr>
     `).join('');
 
@@ -91,64 +109,25 @@ app.get('/admin', async (req, res) => {
       <html lang="ar" dir="rtl">
         <head>
           <meta charset="UTF-8" />
-          <title>لوحة إدارة الطلبات</title>
-          <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
+          <title>لوحة الإدارة</title>
           <style>
-            body {
-              font-family: 'Almarai', sans-serif;
-              margin: 0;
-              padding: 30px;
-              background: #f5f7fa;
-              color: #333;
-              direction: rtl;
-            }
-            h1 {
-              text-align: center;
-              color: #3b0a77;
-              margin-bottom: 30px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              background: #fff;
-              border-radius: 10px;
-              overflow: hidden;
-              box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-            }
-            th, td {
-              padding: 15px;
-              text-align: center;
-              border-bottom: 1px solid #eee;
-              font-size: 15px;
-            }
-            th {
-              background-color: #3b0a77;
-              color: white;
-              font-size: 16px;
-            }
-            tr:hover {
-              background-color: #f0f0f0;
-            }
-            button {
-              padding: 5px 10px;
-              font-size: 14px;
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-            }
-            .refresh-btn {
-              display: block;
-              margin: 0 auto 20px;
-              padding: 10px 25px;
-              background-color: #3b0a77;
-              color: white;
-              font-size: 15px;
-            }
+            body { font-family: 'Tahoma'; background: #f9f9f9; padding: 20px; }
+            h1 { text-align: center; color: #3b0a77; }
+            table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 0 10px #ccc; }
+            th, td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; }
+            th { background: #3b0a77; color: white; }
+            input[type="search"] { width: 250px; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+            button { padding: 5px 10px; border: none; border-radius: 5px; }
+            .logout { float: left; margin-top: -50px; background: #777; color: white; }
           </style>
         </head>
         <body>
-          <h1>طلبات iPhone</h1>
-          <button class="refresh-btn" onclick="location.reload()">🔄 تحديث الطلبات</button>
+          <h1>لوحة الطلبات</h1>
+          <form method="GET" action="/admin">
+            <input type="search" name="q" placeholder="بحث بالاسم أو الجوال أو الكود" value="${q}" />
+            <button type="submit">بحث</button>
+            <button onclick="window.location.href='/logout'" class="logout">تسجيل الخروج</button>
+          </form>
           <table>
             <thead>
               <tr>
@@ -168,16 +147,11 @@ app.get('/admin', async (req, res) => {
 
           <script>
             function deleteOrder(id) {
-              if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
-                fetch('/api/delete/' + id, { method: 'DELETE' })
-                  .then(res => {
-                    if (res.ok) {
-                      alert('تم حذف الطلب بنجاح');
-                      location.reload();
-                    } else {
-                      alert('حدث خطأ أثناء الحذف');
-                    }
-                  });
+              if (confirm('هل تريد حذف الطلب؟')) {
+                fetch('/api/delete/' + id, { method: 'DELETE' }).then(res => {
+                  if (res.ok) location.reload();
+                  else alert('فشل الحذف');
+                });
               }
             }
           </script>
@@ -185,12 +159,21 @@ app.get('/admin', async (req, res) => {
       </html>
     `);
   } catch (err) {
-    console.error('Admin page error:', err);
-    res.status(500).send('حدث خطأ أثناء جلب الطلبات');
+    console.error(err);
+    res.status(500).send('حدث خطأ');
   }
 });
 
-// تشغيل الخادم
+// API لحذف الطلب
+app.delete('/api/delete/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'خطأ في الحذف' });
+  }
+});
+
 app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
+  console.log(`🚀 Running on http://localhost:${port}`);
 });
