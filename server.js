@@ -118,7 +118,8 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
-    req.session.authenticated = true;
+  req.session.authenticated = true;
+    req.session.username = 'سامر عبدالله';  
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
@@ -224,6 +225,7 @@ app.get('/admin', async (req, res) => {
         </head>
         <body>
           <h1>طلبات iPhone</h1>
+          <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username || ''}</h2>
           <div class="logout-link">
             <a href="/logout">🔓 تسجيل الخروج</a>
           </div>
