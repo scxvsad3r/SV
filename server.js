@@ -1,6 +1,64 @@
-app.get('/admin', async (req, res) => {
-  res.set('Cache-Control', 'no-store'); // يمنع المتصفح من تذكر الجلسة
+عدل هذ هو خله كل مرة يطل منه كلمت مرور
 
+const express = require('express');
+const basicAuth = require('express-basic-auth');
+const { Pool } = require('pg');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// الاتصال بقاعدة البيانات
+const pool = new Pool({
+  connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
+  ssl: { rejectUnauthorized: false }
+});
+
+// إنشاء جدول الطلبات (مرة وحدة فقط)
+pool.query(`
+  CREATE TABLE IF NOT EXISTS orders (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    phone TEXT,
+    device TEXT,
+    cash_price INTEGER,
+    installment_price INTEGER,
+    monthly INTEGER,
+    order_code TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+app.use(cors());
+app.use(bodyParser.json());
+
+// نقطة استقبال الطلب من HTML
+app.post('/api/order', async (req, res) => {
+  const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
+
+  try {
+    await pool.query(
+      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [name, phone, device, cashPrice, installmentPrice, monthly, code]
+    );
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+// حماية صفحة الإدارة
+app.use('/admin', basicAuth({
+  users: { 'admin': '123456' },
+  challenge: true,
+  unauthorizedResponse: 'غير مصرح'
+}));
+
+// صفحة الإدارة
+app.get('/admin', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     const rows = result.rows.map(order => `
@@ -52,4 +110,8 @@ app.get('/admin', async (req, res) => {
   } catch (err) {
     res.status(500).send('حدث خطأ أثناء جلب الطلبات');
   }
+});
+
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
 });
