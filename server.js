@@ -7,13 +7,11 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// PostgreSQL
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات إذا لم يكن موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -40,7 +38,6 @@ app.use(session({
   cookie: { secure: false, httpOnly: true }
 }));
 
-// صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -89,12 +86,24 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// صفحة الإدارة
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
 
   try {
-    const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+    let result;
+    const searchQuery = req.query.q;
+
+    if (searchQuery) {
+      const search = `%${searchQuery}%`;
+      result = await pool.query(`
+        SELECT * FROM orders
+        WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
+        ORDER BY created_at DESC
+      `, [search]);
+    } else {
+      result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+    }
+
     const rows = result.rows.map(order => `
       <tr>
         <td>${order.name}</td>
@@ -141,7 +150,11 @@ app.get('/admin', async (req, res) => {
           <h1>طلبات iPhone</h1>
           <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username || ''}</h2>
           <div class="logout-link"><a href="/logout">🔓 تسجيل الخروج</a></div>
-          <button class="refresh-btn" onclick="location.reload()">🔄 تحديث الطلبات</button>
+          <form method="GET" action="/admin" style="text-align: center; margin-bottom: 20px;">
+            <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" style="padding:10px; width: 300px; border-radius: 6px; border:1px solid #ccc;" value="${req.query.q || ''}" />
+            <button type="submit" style="padding: 10px 20px; background-color: #3b0a77; color: white; border: none; border-radius: 6px;">🔍 بحث</button>
+          </form>
+          <button class="refresh-btn" onclick="location.href='/admin'">🔄 تحديث الطلبات</button>
           <table>
             <thead>
               <tr>
@@ -187,7 +200,6 @@ app.get('/admin', async (req, res) => {
   }
 });
 
-// API: استلام الطلب الجديد
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
   try {
@@ -202,7 +214,6 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
-// API: حذف الطلب
 app.delete('/api/delete/:id', async (req, res) => {
   const id = req.params.id;
   try {
@@ -214,7 +225,6 @@ app.delete('/api/delete/:id', async (req, res) => {
   }
 });
 
-// ✅ API: تحديث الحالة
 app.put('/api/status/:id', async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -227,7 +237,6 @@ app.put('/api/status/:id', async (req, res) => {
   }
 });
 
-// تشغيل السيرفر
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
