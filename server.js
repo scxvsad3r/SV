@@ -48,6 +48,18 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
+// مسار لحذف الطلب
+app.delete('/api/delete/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Delete error:', err);
+    res.status(500).json({ error: 'خطأ في حذف الطلب' });
+  }
+});
+
 // حماية صفحة الإدارة بكلمة مرور
 app.use('/admin', basicAuth({
   users: { 'admin': '123456' },
@@ -69,6 +81,9 @@ app.get('/admin', async (req, res) => {
         <td>${order.monthly}</td>
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString()}</td>
+        <td>
+          <button onclick="deleteOrder(${order.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">حذف</button>
+        </td>
       </tr>
     `).join('');
 
@@ -115,21 +130,25 @@ app.get('/admin', async (req, res) => {
               background-color: #f0f0f0;
             }
             button {
-              display: block;
-              margin: 0 auto 20px;
-              padding: 10px 25px;
-              font-size: 15px;
-              background-color: #3b0a77;
-              color: white;
+              padding: 5px 10px;
+              font-size: 14px;
               border: none;
               border-radius: 6px;
               cursor: pointer;
+            }
+            .refresh-btn {
+              display: block;
+              margin: 0 auto 20px;
+              padding: 10px 25px;
+              background-color: #3b0a77;
+              color: white;
+              font-size: 15px;
             }
           </style>
         </head>
         <body>
           <h1>طلبات iPhone</h1>
-          <button onclick="location.reload()">🔄 تحديث الطلبات</button>
+          <button class="refresh-btn" onclick="location.reload()">🔄 تحديث الطلبات</button>
           <table>
             <thead>
               <tr>
@@ -141,10 +160,27 @@ app.get('/admin', async (req, res) => {
                 <th>القسط الشهري</th>
                 <th>كود الطلب</th>
                 <th>الوقت</th>
+                <th>حذف</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
+
+          <script>
+            function deleteOrder(id) {
+              if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
+                fetch('/api/delete/' + id, { method: 'DELETE' })
+                  .then(res => {
+                    if (res.ok) {
+                      alert('تم حذف الطلب بنجاح');
+                      location.reload();
+                    } else {
+                      alert('حدث خطأ أثناء الحذف');
+                    }
+                  });
+              }
+            }
+          </script>
         </body>
       </html>
     `);
