@@ -1,4 +1,3 @@
-عدل هذ هو خله كل مرة يطل منه كلمت مرور
 
 const express = require('express');
 const basicAuth = require('express-basic-auth');
