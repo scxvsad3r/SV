@@ -83,6 +83,41 @@ app.get('/admin', async (req, res) => {
             table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 0 10px #ccc; }
             th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
             th { background: #3b0a77; color: white; }
+   <style>
+            body {
+              font-family: 'Almarai', sans-serif;
+              margin: 0;
+              padding: 20px;
+              background: #f4f4f9;
+              color: #333;
+            }
+            h1 {
+              text-align: center;
+              color: #3b0a77;
+              margin-bottom: 20px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              background: #fff;
+              border-radius: 10px;
+              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
+            }
+            th, td {
+              padding: 14px 10px;
+              text-align: center;
+              border-bottom: 1px solid #eee;
+            }
+            th {
+              background-color: #3b0a77;
+              color: white;
+            }
+            tr:hover {
+              background-color: #f1f1f1;
+            }
+          </style>
+            
           </style>
         </head>
         <body>
