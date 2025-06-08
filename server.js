@@ -36,9 +36,12 @@ app.use(bodyParser.json());
 app.use(session({
   secret: 'secret-key',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
+  cookie: {
+    secure: true, // غيّر إلى true إذا كنت تستخدم HTTPS
+    httpOnly: true
+  }
 }));
-
 // صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
