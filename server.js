@@ -62,7 +62,7 @@ app.delete('/api/delete/:id', async (req, res) => {
 
 // حماية صفحة الإدارة بكلمة مرور
 app.use('/admin', basicAuth({
-  users: { 'admin': '123456' },
+  users: { 'admin': 'dev2008' },
   challenge: true,
   unauthorizedResponse: 'غير مصرح'
 }));
