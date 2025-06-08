@@ -1,32 +1,30 @@
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
-const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// إعداد الجلسات
+// إعداد الجلسة
 app.use(session({
-  secret: '4store_secret_key',
+  secret: 'storeSecretKey',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
 }));
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(express.static('public'));
 
-// قاعدة البيانات
+// الاتصال بقاعدة البيانات
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات إذا غير موجود
+// إنشاء جدول الطلبات
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -41,26 +39,80 @@ pool.query(`
   )
 `);
 
-// صفحة تسجيل الدخول
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+// عرض صفحة تسجيل الدخول
+app.get('/admin/login', (req, res) => {
+  res.send(`
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تسجيل الدخول - 4 STORE</title>
+      <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
+      <style>
+        body {
+          font-family: 'Almarai', sans-serif;
+          background: #f5f5f5;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+        }
+        .login-box {
+          background: white;
+          padding: 30px;
+          border-radius: 10px;
+          box-shadow: 0 0 15px rgba(0,0,0,0.1);
+          width: 350px;
+          text-align: center;
+        }
+        h2 {
+          margin-bottom: 20px;
+          color: #3b0a77;
+        }
+        input {
+          width: 100%;
+          padding: 10px;
+          margin: 10px 0;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+        }
+        button {
+          background: #3b0a77;
+          color: white;
+          padding: 10px 20px;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          width: 100%;
+        }
+      </style>
+    </head>
+    <body>
+      <form class="login-box" method="POST" action="/admin/login">
+        <h2>تسجيل دخول الإدارة</h2>
+        <input type="text" name="username" placeholder="اسم المستخدم" required />
+        <input type="password" name="password" placeholder="كلمة المرور" required />
+        <button type="submit">دخول</button>
+      </form>
+    </body>
+    </html>
+  `);
 });
 
-// التحقق من بيانات الدخول
-app.post('/login', (req, res) => {
+// استقبال بيانات تسجيل الدخول
+app.post('/admin/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === '123456') {
     req.session.loggedIn = true;
-    res.redirect('/admin');
+    return res.redirect('/admin');
   } else {
-    res.send('<script>alert("بيانات غير صحيحة"); window.location="/login";</script>');
+    return res.send('<script>alert("بيانات غير صحيحة"); window.location="/admin/login";</script>');
   }
 });
 
-// حماية صفحة الإدارة
+// التحقق قبل دخول لوحة الإدارة
 app.get('/admin', async (req, res) => {
   if (!req.session.loggedIn) {
-    return res.redirect('/login');
+    return res.redirect('/admin/login');
   }
 
   try {
@@ -70,9 +122,9 @@ app.get('/admin', async (req, res) => {
         <td>${order.name}</td>
         <td>${order.phone}</td>
         <td>${order.device}</td>
-        <td>${order.cash_price} ريال</td>
-        <td>${order.installment_price} ريال</td>
-        <td>${order.monthly} ريال</td>
+        <td>${order.cash_price}</td>
+        <td>${order.installment_price}</td>
+        <td>${order.monthly}</td>
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString('ar-EG')}</td>
       </tr>
@@ -82,19 +134,37 @@ app.get('/admin', async (req, res) => {
       <html lang="ar" dir="rtl">
         <head>
           <meta charset="UTF-8" />
-          <title>لوحة إدارة الطلبات - 4 STORE</title>
-          <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
+          <title>لوحة الإدارة - 4 STORE</title>
           <style>
-            body { font-family: 'Almarai', sans-serif; padding: 30px; background: #f4f4f9; color: #333; direction: rtl; }
-            h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 0 10px #ccc; overflow: hidden; }
-            th, td { padding: 12px 10px; text-align: center; border-bottom: 1px solid #eee; }
-            th { background: #3b0a77; color: white; }
-            tr:hover { background-color: #f1f1f1; }
+            body {
+              font-family: 'Almarai', sans-serif;
+              background: #f9f9f9;
+              padding: 20px;
+            }
+            h1 {
+              text-align: center;
+              color: #3b0a77;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              background: white;
+              box-shadow: 0 0 10px #ccc;
+              margin-top: 20px;
+            }
+            th, td {
+              padding: 10px;
+              border: 1px solid #ddd;
+              text-align: center;
+            }
+            th {
+              background: #3b0a77;
+              color: white;
+            }
           </style>
         </head>
         <body>
-          <h1>طلبات iPhone - 4 STORE</h1>
+          <h1>طلبات iPhone</h1>
           <table>
             <thead>
               <tr>
@@ -114,10 +184,15 @@ app.get('/admin', async (req, res) => {
       </html>
     `);
   } catch (err) {
-    res.status(500).send('خطأ أثناء جلب الطلبات');
+    res.status(500).send('حدث خطأ أثناء جلب الطلبات');
   }
 });
 
+// المسار الرئيسي
+app.get('/', (req, res) => {
+  res.send('<h2>أهلاً بك في لوحة 4 STORE، انتقل إلى <a href="/admin/login">تسجيل الدخول</a></h2>');
+});
+
 app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+  console.log(`Server running at http://localhost:${port}`);
 });
