@@ -3,7 +3,6 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 const cors = require('cors');
-const axios = require('axios'); // لإرسال إشعار إلى Discord
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -70,14 +69,12 @@ app.get('/login', (req, res) => {
   `);
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
     req.session.authenticated = true;
     req.session.username = 'سامر عبدالله';
-
-    // إرسال إشعار إلى Discord عند تسجيل الدخول
-    try {
+try {
       await axios.post('https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z', {
         content: `🛡️ تم تسجيل دخول الأدمن: ${req.session.username}\n🕒 الوقت: ${new Date().toLocaleString('ar-EG')}`
       });
@@ -85,6 +82,7 @@ app.post('/login', async (req, res) => {
       console.error('فشل إرسال إشعار إلى Discord:', err.message);
     }
 
+    
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
@@ -198,11 +196,7 @@ app.get('/admin', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
               }).then(res => {
-                if (res.ok) {
-                  alert('✅ تم تحديث الحالة بنجاح');
-                } else {
-                  alert('❌ فشل في تحديث الحالة');
-                }
+                if (!res.ok) alert('فشل في تحديث الحالة');
               });
             }
           </script>
@@ -265,12 +259,6 @@ app.put('/api/status/:id', async (req, res) => {
     res.status(500).json({ error: 'فشل تحديث الحالة' });
   }
 });
-
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Server is running...');
-});
-
-
 
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
