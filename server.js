@@ -121,9 +121,7 @@ app.post('/admin/login', (req, res) => {
 
 // حماية صفحة الإدارة
 app.get('/admin', async (req, res) => {
-  if (!req.session.loggedIn) {
-    return res.redirect('/admin/login');
-  }
+  if (!req.session.loggedIn) return res.redirect('/admin/login');
 
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
@@ -143,48 +141,96 @@ app.get('/admin', async (req, res) => {
     res.send(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>لوحة الإدارة - 4 STORE</title>
-          <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
-          <style>
-            body {
-              font-family: 'Almarai', sans-serif;
-              margin: 0;
-              padding: 20px;
-              background: #f4f4f9;
-              color: #333;
-            }
-            h1 {
-              text-align: center;
-              color: #3b0a77;
-              margin-bottom: 20px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              background: #fff;
-              border-radius: 10px;
-              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-              overflow: hidden;
-            }
-            th, td {
-              padding: 14px 10px;
-              text-align: center;
-              border-bottom: 1px solid #eee;
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>لوحة الطلبات - 4 STORE</title>
+        <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+          body {
+            font-family: 'Almarai', sans-serif;
+            margin: 0;
+            background: #f8f8fc;
+          }
+          header {
+            background-color: #3b0a77;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 24px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+          }
+          .logout {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            background-color: #fff;
+            color: #3b0a77;
+            padding: 8px 16px;
+            border: 1px solid #3b0a77;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+          }
+          .container {
+            padding: 20px;
+            max-width: 95%;
+            margin: auto;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          }
+          th, td {
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+          }
+          th {
+            background-color: #f1eef9;
+            color: #3b0a77;
+            font-weight: bold;
+          }
+          tr:hover {
+            background-color: #f9f9ff;
+          }
+
+          @media (max-width: 768px) {
+            table, thead, tbody, th, td, tr {
+              display: block;
             }
             th {
-              background-color: #3b0a77;
-              color: white;
+              display: none;
             }
-            tr:hover {
-              background-color: #f1f1f1;
+            td {
+              position: relative;
+              padding-right: 50%;
+              text-align: right;
+              border-bottom: 1px solid #ddd;
             }
-          </style>
-        </head>
-        <body>
-          <h1>طلبات iPhone - 4 STORE</h1>
+            td::before {
+              content: attr(data-label);
+              position: absolute;
+              right: 10px;
+              font-weight: bold;
+              color: #3b0a77;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          لوحة إدارة الطلبات - 4 STORE
+          <a class="logout" href="/admin/logout">تسجيل خروج</a>
+        </header>
+        <div class="container">
           <table>
             <thead>
               <tr>
@@ -198,17 +244,27 @@ app.get('/admin', async (req, res) => {
                 <th>الوقت</th>
               </tr>
             </thead>
-            <tbody>${rows}</tbody>
+            <tbody>
+              ${rows.map(order => `
+                <tr>
+                  <td data-label="الاسم">${order.name}</td>
+                  <td data-label="الجوال">${order.phone}</td>
+                  <td data-label="الجهاز">${order.device}</td>
+                  <td data-label="كاش">${order.cash_price} ريال</td>
+                  <td data-label="تقسيط">${order.installment_price} ريال</td>
+                  <td data-label="شهري">${order.monthly} ريال</td>
+                  <td data-label="كود">${order.order_code}</td>
+                  <td data-label="الوقت">${new Date(order.created_at).toLocaleString('ar-EG')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
           </table>
-        </body>
+        </div>
+      </body>
       </html>
     `);
   } catch (err) {
     console.error(err);
-    res.status(500).send('حدث خطأ أثناء جلب الطلبات');
+    res.status(500).send('خطأ في تحميل الطلبات');
   }
-});
-
-app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
 });
