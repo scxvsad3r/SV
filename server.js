@@ -13,7 +13,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات (مرة وحدة فقط)
+// إنشاء جدول الطلبات (مرة واحدة فقط)
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -31,7 +31,7 @@ pool.query(`
 app.use(cors());
 app.use(bodyParser.json());
 
-// نقطة استقبال الطلب من HTML
+// استقبال الطلب من نموذج HTML
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
 
@@ -48,14 +48,14 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
-// حماية صفحة الإدارة
+// حماية صفحة الإدارة بكلمة مرور
 app.use('/admin', basicAuth({
   users: { 'admin': '123456' },
   challenge: true,
   unauthorizedResponse: 'غير مصرح'
 }));
 
-// صفحة الإدارة
+// صفحة عرض الطلبات
 app.get('/admin', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
@@ -77,51 +77,59 @@ app.get('/admin', async (req, res) => {
         <head>
           <meta charset="UTF-8" />
           <title>لوحة إدارة الطلبات</title>
+          <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
           <style>
-            body { font-family: sans-serif; padding: 20px; background: #f8f8f8; direction: rtl; }
-            h1 { color: #3b0a77; }
-            table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 0 10px #ccc; }
-            th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
-            th { background: #3b0a77; color: white; }
-   <style>
             body {
               font-family: 'Almarai', sans-serif;
               margin: 0;
-              padding: 20px;
-              background: #f4f4f9;
+              padding: 30px;
+              background: #f5f7fa;
               color: #333;
+              direction: rtl;
             }
             h1 {
               text-align: center;
               color: #3b0a77;
-              margin-bottom: 20px;
+              margin-bottom: 30px;
             }
             table {
               width: 100%;
               border-collapse: collapse;
               background: #fff;
               border-radius: 10px;
-              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
               overflow: hidden;
+              box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
             }
             th, td {
-              padding: 14px 10px;
+              padding: 15px;
               text-align: center;
               border-bottom: 1px solid #eee;
+              font-size: 15px;
             }
             th {
               background-color: #3b0a77;
               color: white;
+              font-size: 16px;
             }
             tr:hover {
-              background-color: #f1f1f1;
+              background-color: #f0f0f0;
             }
-          </style>
-            
+            button {
+              display: block;
+              margin: 0 auto 20px;
+              padding: 10px 25px;
+              font-size: 15px;
+              background-color: #3b0a77;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            }
           </style>
         </head>
         <body>
           <h1>طلبات iPhone</h1>
+          <button onclick="location.reload()">🔄 تحديث الطلبات</button>
           <table>
             <thead>
               <tr>
@@ -141,10 +149,12 @@ app.get('/admin', async (req, res) => {
       </html>
     `);
   } catch (err) {
+    console.error('Admin page error:', err);
     res.status(500).send('حدث خطأ أثناء جلب الطلبات');
   }
 });
 
+// تشغيل الخادم
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`🚀 Server running at http://localhost:${port}`);
 });
