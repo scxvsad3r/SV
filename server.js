@@ -1,19 +1,19 @@
 const express = require('express');
-const session = require('express-session');
+const basicAuth = require('express-basic-auth');
+const { Pool } = require('pg');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { Pool } = require('pg');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// إعداد الاتصال بقاعدة البيانات PostgreSQL
+// الاتصال بقاعدة البيانات
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات إذا لم يكن موجودًا
+// إنشاء جدول الطلبات (مرة وحدة فقط)
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -31,16 +31,7 @@ pool.query(`
 app.use(cors());
 app.use(bodyParser.json());
 
-app.use(session({
-  secret: 'secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: null // تنتهي عند إغلاق المتصفح
-  }
-}));
-
-// نقطة استلام الطلب من HTML
+// نقطة استقبال الطلب من HTML
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
 
@@ -57,50 +48,15 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
-// شاشة تسجيل الدخول
-app.get('/admin/login', (req, res) => {
-  res.send(`
-    <html lang="ar" dir="rtl">
-      <head>
-        <meta charset="UTF-8" />
-        <title>تسجيل الدخول</title>
-        <style>
-          body { background: #eee; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
-          form { background: white; padding: 30px; box-shadow: 0 0 10px #aaa; border-radius: 8px; }
-          input { margin-bottom: 10px; padding: 10px; width: 100%; }
-          button { padding: 10px; width: 100%; background: #3b0a77; color: white; border: none; }
-        </style>
-      </head>
-      <body>
-        <form method="POST" action="/admin/login">
-          <h3>تسجيل الدخول</h3>
-          <input name="username" placeholder="اسم المستخدم" required />
-          <input name="password" type="password" placeholder="كلمة المرور" required />
-          <button type="submit">دخول</button>
-        </form>
-      </body>
-    </html>
-  `);
-});
+// حماية صفحة الإدارة باستخدام basic-auth (كل مرة يطلب كلمة المرور)
+app.use('/admin', basicAuth({
+  users: { 'admin': '123456' },
+  challenge: true, // <-- هذا يجبر المتصفح يعرض مربع كلمة المرور كل مرة
+  unauthorizedResponse: 'غير مصرح'
+}));
 
-// التحقق من بيانات تسجيل الدخول
-app.post('/admin/login', bodyParser.urlencoded({ extended: false }), (req, res) => {
-  const { username, password } = req.body;
-
-  if (username === 'admin' && password === '123456') {
-    req.session.authenticated = true;
-    res.redirect('/admin');
-  } else {
-    res.send('بيانات الدخول غير صحيحة <a href="/admin/login">حاول مرة أخرى</a>');
-  }
-});
-
-// حماية صفحة /admin
+// صفحة الإدارة
 app.get('/admin', async (req, res) => {
-  if (!req.session.authenticated) {
-    return res.redirect('/admin/login');
-  }
-
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     const rows = result.rows.map(order => `
@@ -120,7 +76,7 @@ app.get('/admin', async (req, res) => {
       <html lang="ar" dir="rtl">
         <head>
           <meta charset="UTF-8" />
-          <title>لوحة الطلبات</title>
+          <title>لوحة إدارة الطلبات</title>
           <style>
             body { font-family: sans-serif; padding: 20px; background: #f8f8f8; direction: rtl; }
             h1 { color: #3b0a77; }
@@ -150,10 +106,10 @@ app.get('/admin', async (req, res) => {
       </html>
     `);
   } catch (err) {
-    res.status(500).send('خطأ أثناء جلب البيانات');
+    res.status(500).send('حدث خطأ أثناء جلب الطلبات');
   }
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
+  console.log(`Server running at http://localhost:${port}`);
 });
