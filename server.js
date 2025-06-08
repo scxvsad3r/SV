@@ -14,7 +14,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// إعدادات الجلسة (للاحتفاظ بتسجيل الدخول)
+// إعدادات الجلسة
 app.use(session({
   secret: 'secret-key',
   resave: false,
@@ -24,7 +24,7 @@ app.use(session({
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// إنشاء جدول الطلبات إذا ما كان موجود
+// إنشاء جدول الطلبات إذا لم يكن موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -109,7 +109,7 @@ app.get('/admin/login', (req, res) => {
   `);
 });
 
-// التحقق من تسجيل الدخول
+// تحقق من بيانات تسجيل الدخول
 app.post('/admin/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === '123456') {
@@ -120,7 +120,7 @@ app.post('/admin/login', (req, res) => {
   }
 });
 
-// حماية صفحة الإدارة
+// صفحة الإدارة بعد تسجيل الدخول
 app.get('/admin', async (req, res) => {
   if (!req.session.loggedIn) {
     return res.redirect('/admin/login');
@@ -210,6 +210,29 @@ app.get('/admin', async (req, res) => {
   }
 });
 
+// ✅ API: استقبال الطلب من HTML وتخزينه في قاعدة البيانات
+app.post('/api/order', async (req, res) => {
+  const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
+
+  if (!name || !phone || !device || !cashPrice || !installmentPrice || !monthly || !code) {
+    return res.status(400).json({ error: 'يرجى تعبئة جميع الحقول' });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [name, phone, device, cashPrice, installmentPrice, monthly, code]
+    );
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('خطأ في حفظ الطلب:', error);
+    res.status(500).json({ error: 'فشل في حفظ الطلب' });
+  }
+});
+
+// تشغيل السيرفر
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
