@@ -202,15 +202,29 @@ app.get('/admin', async (req, res) => {
 
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
+
+  if (!name || !phone || !device || !code || phone.length < 8 || name.length < 2) {
+    return res.status(400).json({ error: 'البيانات المدخلة غير صحيحة' });
+  }
+
   try {
+    const existing = await pool.query(`
+      SELECT * FROM orders WHERE phone = $1 AND order_code = $2
+    `, [phone, code]);
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'تم تقديم هذا الطلب مسبقًا' });
+    }
+
     await pool.query(`
       INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
+
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Database error:', err);
-    res.status(500).json({ error: 'DB error' });
+    res.status(500).json({ error: 'حدث خطأ أثناء معالجة الطلب' });
   }
 });
 
