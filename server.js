@@ -1,17 +1,32 @@
 const express = require('express');
-const basicAuth = require('express-basic-auth');
-const { Pool } = require('pg');
+const session = require('express-session');
 const bodyParser = require('body-parser');
+const path = require('path');
+const { Pool } = require('pg');
 const cors = require('cors');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// إعداد الجلسات
+app.use(session({
+  secret: '4store_secret_key',
+  resave: false,
+  saveUninitialized: true
+}));
+
+app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(express.static('public'));
+
+// قاعدة البيانات
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
+// إنشاء جدول الطلبات إذا غير موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -26,34 +41,28 @@ pool.query(`
   )
 `);
 
-app.use(cors());
-app.use(bodyParser.json());
+// صفحة تسجيل الدخول
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
-app.post('/api/order', async (req, res) => {
-  const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-
-  try {
-    await pool.query(
-      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [name, phone, device, cashPrice, installmentPrice, monthly, code]
-    );
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error('Database error:', err);
-    res.status(500).json({ error: 'DB error' });
+// التحقق من بيانات الدخول
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'admin' && password === '123456') {
+    req.session.loggedIn = true;
+    res.redirect('/admin');
+  } else {
+    res.send('<script>alert("بيانات غير صحيحة"); window.location="/login";</script>');
   }
 });
 
-// الحماية بالـ basicAuth
-app.use('/admin', basicAuth({
-  users: { 'admin': '123456' },
-  challenge: true,
-  unauthorizedResponse: 'غير مصرح'
-}));
-
-// صفحة الإدارة بتصميم أنيق
+// حماية صفحة الإدارة
 app.get('/admin', async (req, res) => {
+  if (!req.session.loggedIn) {
+    return res.redirect('/login');
+  }
+
   try {
     const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     const rows = result.rows.map(order => `
@@ -76,52 +85,12 @@ app.get('/admin', async (req, res) => {
           <title>لوحة إدارة الطلبات - 4 STORE</title>
           <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&display=swap" rel="stylesheet">
           <style>
-            body {
-              font-family: 'Almarai', sans-serif;
-              margin: 0;
-              background: #f4f4f9;
-              color: #333;
-              padding: 30px;
-            }
-            h1 {
-              text-align: center;
-              color: #3b0a77;
-              margin-bottom: 20px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              background: #fff;
-              border-radius: 10px;
-              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-              overflow: hidden;
-            }
-            th, td {
-              padding: 14px 10px;
-              text-align: center;
-              border-bottom: 1px solid #eee;
-            }
-            th {
-              background-color: #3b0a77;
-              color: white;
-            }
-            tr:hover {
-              background-color: #f1f1f1;
-            }
-            @media (max-width: 768px) {
-              table, thead, tbody, th, td, tr {
-                display: block;
-              }
-              td {
-                text-align: right;
-                padding-right: 50%;
-              }
-              td::before {
-                content: attr(data-label);
-                float: right;
-                font-weight: bold;
-              }
-            }
+            body { font-family: 'Almarai', sans-serif; padding: 30px; background: #f4f4f9; color: #333; direction: rtl; }
+            h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 0 10px #ccc; overflow: hidden; }
+            th, td { padding: 12px 10px; text-align: center; border-bottom: 1px solid #eee; }
+            th { background: #3b0a77; color: white; }
+            tr:hover { background-color: #f1f1f1; }
           </style>
         </head>
         <body>
@@ -145,11 +114,10 @@ app.get('/admin', async (req, res) => {
       </html>
     `);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('حدث خطأ أثناء جلب الطلبات');
+    res.status(500).send('خطأ أثناء جلب الطلبات');
   }
 });
 
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`Server running on http://localhost:${port}`);
 });
