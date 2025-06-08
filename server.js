@@ -24,6 +24,7 @@ pool.query(`
     installment_price INTEGER,
     monthly INTEGER,
     order_code TEXT,
+    status TEXT DEFAULT 'قيد المراجعة',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )
 `);
@@ -32,15 +33,11 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// إعداد الجلسة: تنتهي عند إغلاق المتصفح
 app.use(session({
   secret: 'secret-key',
   resave: false,
   saveUninitialized: true,
-  cookie: {
-    secure: false, // true إذا كان HTTPS
-    httpOnly: true
-  }
+  cookie: { secure: false, httpOnly: true }
 }));
 
 // صفحة تسجيل الدخول
@@ -52,53 +49,14 @@ app.get('/login', (req, res) => {
         <title>تسجيل الدخول - 4 STORE</title>
         <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
         <style>
-          body {
-            font-family: 'Almarai', sans-serif;
-            background: linear-gradient(to right, #3b0a77, #845ec2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-          }
-          .login-box {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            text-align: center;
-            width: 350px;
-          }
-          h2 {
-            margin-bottom: 25px;
-            color: #3b0a77;
-          }
-          input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 15px;
-          }
-          button {
-            width: 100%;
-            padding: 12px;
-            background: #3b0a77;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-          button:hover {
-            background: #5a22a1;
-          }
-          .error {
-            color: red;
-            margin-bottom: 10px;
-            font-size: 14px;
-          }
+          body { font-family: 'Almarai', sans-serif; background: linear-gradient(to right, #3b0a77, #845ec2); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; width: 350px; }
+          h2 { margin-bottom: 25px; color: #3b0a77; }
+          input, button { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; font-size: 15px; }
+          input { border: 1px solid #ccc; }
+          button { background: #3b0a77; color: white; border: none; }
+          button:hover { background: #5a22a1; }
+          .error { color: red; margin-bottom: 10px; font-size: 14px; }
         </style>
       </head>
       <body>
@@ -114,19 +72,17 @@ app.get('/login', (req, res) => {
   `);
 });
 
-// التحقق من تسجيل الدخول
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
-  req.session.authenticated = true;
-    req.session.username = 'سامر عبدالله';  
+    req.session.authenticated = true;
+    req.session.username = 'سامر عبدالله';
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
   }
 });
 
-// تسجيل الخروج
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
@@ -150,6 +106,14 @@ app.get('/admin', async (req, res) => {
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString()}</td>
         <td>
+          <select onchange="updateStatus(${order.id}, this.value)">
+            <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
+            <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
+            <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+            <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
+          </select>
+        </td>
+        <td>
           <button onclick="deleteOrder(${order.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">حذف</button>
         </td>
       </tr>
@@ -162,73 +126,21 @@ app.get('/admin', async (req, res) => {
           <title>لوحة إدارة الطلبات</title>
           <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
           <style>
-            body {
-              font-family: 'Almarai', sans-serif;
-              margin: 0;
-              padding: 30px;
-              background: #f5f7fa;
-              color: #333;
-              direction: rtl;
-            }
-            h1 {
-              text-align: center;
-              color: #3b0a77;
-              margin-bottom: 20px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              background: #fff;
-              border-radius: 10px;
-              overflow: hidden;
-              box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-            }
-            th, td {
-              padding: 15px;
-              text-align: center;
-              border-bottom: 1px solid #eee;
-              font-size: 15px;
-            }
-            th {
-              background-color: #3b0a77;
-              color: white;
-              font-size: 16px;
-            }
-            tr:hover {
-              background-color: #f0f0f0;
-            }
-            button {
-              padding: 5px 10px;
-              font-size: 14px;
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-            }
-            .refresh-btn {
-              display: block;
-              margin: 0 auto 20px;
-              padding: 10px 25px;
-              background-color: #3b0a77;
-              color: white;
-              font-size: 15px;
-            }
-            .logout-link {
-              text-align: center;
-              margin-bottom: 15px;
-            }
-            .logout-link a {
-              color: #3b0a77;
-              font-size: 15px;
-              text-decoration: none;
-            }
+            body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
+            h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1); }
+            th, td { padding: 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
+            th { background-color: #3b0a77; color: white; }
+            button { padding: 5px 10px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; }
+            .refresh-btn { display: block; margin: 0 auto 20px; padding: 10px 25px; background-color: #3b0a77; color: white; }
+            .logout-link { text-align: center; margin-bottom: 15px; }
+            .logout-link a { color: #3b0a77; text-decoration: none; font-size: 15px; }
           </style>
         </head>
         <body>
           <h1>طلبات iPhone</h1>
           <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username || ''}</h2>
-          <div class="logout-link">
-            <a href="/logout">🔓 تسجيل الخروج</a>
-          </div>
+          <div class="logout-link"><a href="/logout">🔓 تسجيل الخروج</a></div>
           <button class="refresh-btn" onclick="location.reload()">🔄 تحديث الطلبات</button>
           <table>
             <thead>
@@ -241,6 +153,7 @@ app.get('/admin', async (req, res) => {
                 <th>القسط الشهري</th>
                 <th>كود الطلب</th>
                 <th>الوقت</th>
+                <th>الحالة</th>
                 <th>حذف</th>
               </tr>
             </thead>
@@ -251,15 +164,18 @@ app.get('/admin', async (req, res) => {
             function deleteOrder(id) {
               if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
                 fetch('/api/delete/' + id, { method: 'DELETE' })
-                  .then(res => {
-                    if (res.ok) {
-                      alert('تم حذف الطلب بنجاح');
-                      location.reload();
-                    } else {
-                      alert('حدث خطأ أثناء الحذف');
-                    }
-                  });
+                  .then(res => res.ok ? location.reload() : alert('حدث خطأ أثناء الحذف'));
               }
+            }
+
+            function updateStatus(id, status) {
+              fetch('/api/status/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+              }).then(res => {
+                if (!res.ok) alert('فشل في تحديث الحالة');
+              });
             }
           </script>
         </body>
@@ -271,16 +187,14 @@ app.get('/admin', async (req, res) => {
   }
 });
 
-// استقبال الطلب من صفحة HTML
+// API: استلام الطلب الجديد
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-
   try {
-    await pool.query(
-      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [name, phone, device, cashPrice, installmentPrice, monthly, code]
-    );
+    await pool.query(`
+      INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Database error:', err);
@@ -288,7 +202,7 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
-// حذف الطلب
+// API: حذف الطلب
 app.delete('/api/delete/:id', async (req, res) => {
   const id = req.params.id;
   try {
@@ -297,6 +211,19 @@ app.delete('/api/delete/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete error:', err);
     res.status(500).json({ error: 'خطأ في حذف الطلب' });
+  }
+});
+
+// ✅ API: تحديث الحالة
+app.put('/api/status/:id', async (req, res) => {
+  const id = req.params.id;
+  const { status } = req.body;
+  try {
+    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, id]);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Status update error:', err);
+    res.status(500).json({ error: 'فشل تحديث الحالة' });
   }
 });
 
