@@ -1,18 +1,23 @@
 // server.js
-require('dotenv').config();                    // لتحميل متغيرات البيئة من .env
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 const cors = require('cors');
-const fetch = require('node-fetch');           // إذا كان Node.js أقل من 18، وإلا يمكنك حذفها
+const fetch = require('node-fetch'); // إذا كان Node.js أقل من 18
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// رابط الـ PostgreSQL
+const DATABASE_URL = 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway';
+
+// رابط الـ Discord Webhook
+const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z';
+
 // إعداد قاعدة البيانات
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,  // عيّن DATABASE_URL في .env
+  connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -45,10 +50,8 @@ app.use(session({
 
 // دالة مساعدة للإرسال إلى Discord
 async function notifyDiscord(message) {
-  const url = process.env.DISCORD_WEBHOOK_URL;
-  if (!url) return;
   try {
-    await fetch(url, {
+    await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: message })
@@ -132,8 +135,6 @@ app.get('/admin', async (req, res) => {
     query += ' ORDER BY created_at DESC';
 
     const result = await pool.query(query, values);
-
-    // إحصائيات
     const statsRes = await pool.query(`
       SELECT 
         COUNT(*) FILTER (WHERE status = 'قيد المراجعة') AS pending,
@@ -286,8 +287,9 @@ app.post('/api/order', async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [name, phone, device, cashPrice, installmentPrice, monthly, code]
     );
-    // إشعار Discord
-    notifyDiscord(`📥 طلب جديد #${code}\n• ${name} - ${phone}\n• ${device}\n• كاش: ${cashPrice} - تقسيط: ${installmentPrice}`);
+    notifyDiscord(
+      `📥 طلب جديد #${code}\n• ${name} - ${phone}\n• ${device}\n• كاش: ${cashPrice} - تقسيط: ${installmentPrice}`
+    );
     res.json({ success: true });
   } catch (err) {
     console.error(err);
