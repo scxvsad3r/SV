@@ -3,14 +3,9 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 const cors = require('cors');
-// قم باستيراد node-fetch
-const fetch = require('node-fetch'); // أو import fetch from 'node-fetch'; إذا كنت تستخدم ES Modules
 
 const app = express();
 const port = process.env.PORT || 3000;
-
-// عنوان الويب هوك الخاص بالديسكورد
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z';
 
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
@@ -93,11 +88,11 @@ app.get('/logout', (req, res) => {
 
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
-
+  
   try {
     let result;
     const searchQuery = req.query.q;
-
+    
     if (searchQuery) {
       const search = `%${searchQuery}%`;
       result = await pool.query(`
@@ -108,7 +103,7 @@ app.get('/admin', async (req, res) => {
     } else {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     }
-
+    
     const rows = result.rows.map(order => `
       <tr>
         <td>${order.name}</td>
@@ -132,7 +127,7 @@ app.get('/admin', async (req, res) => {
         </td>
       </tr>
     `).join('');
-
+    
     res.send(`
       <html lang="ar" dir="rtl">
         <head>
@@ -207,79 +202,25 @@ app.get('/admin', async (req, res) => {
 
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-
+  
   if (!name || !phone || !device || !code || phone.length < 8 || name.length < 2) {
     return res.status(400).json({ error: 'البيانات المدخلة غير صحيحة' });
   }
-
+  
   try {
     const existing = await pool.query(`
       SELECT * FROM orders WHERE phone = $1 AND order_code = $2
     `, [phone, code]);
-
+    
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'تم تقديم هذا الطلب مسبقًا' });
     }
-
-    // إدخال الطلب الجديد إلى قاعدة البيانات
+    
     await pool.query(`
       INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
-
-    // *** الجزء الجديد: إرسال رسالة إلى الديسكورد ***
-    const now = new Date();
-    const dateTime = now.toLocaleString('ar-SA', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour12: true
-    });
-
-    const discordMessage = {
-      username: '4 STORE - نظام الطلبات', // اسم البوت الذي يظهر في ديسكورد
-      avatar_url: 'https://i.imgur.com/your-bot-avatar.png', // اختياري: رابط لصورة رمزية للبوت
-      embeds: [
-        {
-          title: `طلب جديد: ${device}`,
-          description: `لقد تم تسجيل طلب جديد بنجاح!`,
-          color: 65280, // لون أخضر (يمكن تغييره)
-          fields: [
-            { name: 'الاسم', value: name, inline: true },
-            { name: 'الجوال', value: phone, inline: true },
-            { name: 'كود الطلب', value: code, inline: true },
-            { name: 'السعر كاش', value: `${cashPrice || 'غير محدد'}`, inline: true },
-            { name: 'السعر تقسيط', value: `${installmentPrice || 'غير محدد'}`, inline: true },
-            { name: 'القسط الشهري', value: `${monthly || 'غير محدد'}`, inline: true },
-            { name: 'الوقت والتاريخ', value: dateTime, inline: false },
-            { name: 'حالة الطلب', value: 'قيد المراجعة', inline: false }
-          ],
-          timestamp: new Date().toISOString(), // الوقت الحالي بصيغة ISO
-          footer: {
-            text: 'نظام إدارة الطلبات - 4 STORE',
-            icon_url: 'https://i.imgur.com/your-footer-icon.png' // اختياري: رابط لصورة صغيرة في التذييل
-          }
-        }
-      ]
-    };
-
-    try {
-      await fetch(DISCORD_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(discordMessage),
-      });
-      console.log('تم إرسال إشعار طلب جديد إلى الديسكورد.');
-    } catch (discordErr) {
-      console.error('فشل إرسال رسالة إلى الديسكورد:', discordErr);
-    }
-    // *** نهاية الجزء الجديد ***
-
+    
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Database error:', err);
