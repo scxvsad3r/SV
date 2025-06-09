@@ -9,31 +9,36 @@ const port = process.env.PORT || 3000;
 
 // إعداد CORS لدعم preflight وإرسال الكوكيز
 const corsOptions = {
-  origin: true,
+  origin: true,                // أو استبدل true بدومين الواجهة الأمامية
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 };
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));  // يعالج جميع طلبات preflight
 
-// إعداد تحليل الجسم
+// تحليل جسم الطلبات
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// إعداد جلسات المستخدم
+// إعداد الجلسات مع sameSite
 app.use(session({
   secret: 'secret-key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false, httpOnly: true }
+  cookie: {
+    secure: false,     // في production وHTTPS جعلها true
+    httpOnly: true,
+    sameSite: 'lax'    // مهم لإرسال الكوكي
+  }
 }));
 
-// إعداد اتصال PostgreSQL
+// إعداد الاتصال بقاعدة PostgreSQL
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات إذا لم يكن موجودًا
+// إنشاء جدول الطلبات إن لم يكن موجوداً
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -47,10 +52,10 @@ pool.query(`
     status TEXT DEFAULT 'قيد المراجعة',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )
-`).catch(err => console.error('Table creation error:', err));
+`).catch(e => console.error('Table creation error:', e));
 
 
-// ======= مسارات المصادقة =======
+// ===== مسارات المصادقة =====
 
 // صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
@@ -106,27 +111,24 @@ app.get('/logout', (req, res) => {
 });
 
 
-// ======= لوحة الإدارة =======
+// ===== لوحة الإدارة =====
 
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
-  
   try {
-    const q = req.query.q;
+    const q = req.query.q || '';
     let result;
     if (q) {
-      const search = `%${q}%`;
+      const like = `%${q}%`;
       result = await pool.query(
         `SELECT * FROM orders
          WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
-         ORDER BY created_at DESC`,
-        [search]
+         ORDER BY created_at DESC`, [like]
       );
     } else {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     }
-    
-    // بناء صفوف الجدول
+
     const rowsHtml = result.rows.map(o => `
       <tr>
         <td>${o.name}</td>
@@ -160,18 +162,18 @@ app.get('/admin', async (req, res) => {
         <title>لوحة إدارة الطلبات - 4 STORE</title>
         <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
         <style>
-          body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
-          h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1); }
-          th, td { padding: 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
-          th { background-color: #3b0a77; color: white; }
-          button { padding: 5px 10px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; }
-          .refresh-btn { display: block; margin: 0 auto 20px; padding: 10px 25px; background-color: #3b0a77; color: white; border: none; border-radius: 6px; }
-          .logout-link { text-align: center; margin-bottom: 15px; }
-          .logout-link a { color: #3b0a77; text-decoration: none; font-size: 15px; }
-          form.search { text-align: center; margin-bottom: 20px; }
-          form.search input { padding:10px; width: 300px; border-radius: 6px; border:1px solid #ccc; }
-          form.search button { padding: 10px 20px; background-color: #3b0a77; color: white; border: none; border-radius: 6px; cursor: pointer; }
+          body { font-family: 'Almarai', sans-serif; margin:0; padding:30px; background:#f5f7fa; color:#333; direction:rtl; }
+          h1 { text-align:center; color:#3b0a77; margin-bottom:20px; }
+          .logout-link { text-align:center; margin-bottom:15px; }
+          .logout-link a { color:#3b0a77; text-decoration:none; font-size:15px; }
+          form.search { text-align:center; margin-bottom:20px; }
+          form.search input { padding:10px; width:300px; border-radius:6px; border:1px solid #ccc; }
+          form.search button { padding:10px 20px; background:#3b0a77; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+          .refresh-btn { display:block; margin:0 auto 20px; padding:10px 25px; background:#3b0a77; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+          table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; box-shadow:0 5px 20px rgba(0,0,0,0.1); }
+          th, td { padding:15px; text-align:center; border-bottom:1px solid #eee; font-size:15px; }
+          th { background:#3b0a77; color:#fff; }
+          button { padding:5px 10px; font-size:14px; border:none; border-radius:6px; cursor:pointer; }
         </style>
       </head>
       <body>
@@ -179,23 +181,16 @@ app.get('/admin', async (req, res) => {
         <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username}</h2>
         <div class="logout-link"><a href="/logout">🔓 تسجيل الخروج</a></div>
         <form class="search" method="GET" action="/admin">
-          <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" value="${q||''}" />
+          <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" value="${q}" />
           <button type="submit">🔍 بحث</button>
         </form>
         <button class="refresh-btn" onclick="location.href='/admin'">🔄 تحديث الطلبات</button>
         <table>
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الجوال</th>
-              <th>الجهاز</th>
-              <th>السعر كاش</th>
-              <th>السعر تقسيط</th>
-              <th>القسط الشهري</th>
-              <th>كود الطلب</th>
-              <th>الوقت</th>
-              <th>الحالة</th>
-              <th>حذف</th>
+              <th>الاسم</th><th>الجوال</th><th>الجهاز</th><th>السعر كاش</th>
+              <th>السعر تقسيط</th><th>القسط الشهري</th><th>كود الطلب</th>
+              <th>الوقت</th><th>الحالة</th><th>حذف</th>
             </tr>
           </thead>
           <tbody>${rowsHtml}</tbody>
@@ -205,43 +200,52 @@ app.get('/admin', async (req, res) => {
             if (!confirm('تأكيد الحذف؟')) return;
             fetch('/api/delete/' + id, {
               method: 'DELETE',
-              credentials: 'same-origin'
-            }).then(r => r.ok ? location.reload() : alert('فشل الحذف'));
+              credentials: 'include'
+            })
+            .then(r => r.ok ? location.reload() : alert('❌ فشل الحذف'));
           }
           function updateStatus(id, status) {
             fetch('/api/status/' + id, {
               method: 'PUT',
-              credentials: 'same-origin',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status })
             })
-            .then(res => {
+            .then(async res => {
               if (res.status === 401) {
                 alert('⚠️ الرجاء تسجيل الدخول');
-                location.href = '/login';
-              } else if (!res.ok) {
-                alert('❌ فشل في تحديث الحالة');
+                return location.href = '/login';
               }
+              if (!res.ok) {
+                const text = await res.text();
+                console.error('Server error:', res.status, text);
+                throw new Error('فشل التحديث');
+              }
+              console.log('✅ تم تحديث الحالة');
+            })
+            .catch(err => {
+              console.error(err);
+              alert('❌ فشل في تحديث الحالة، راجع الكونسول.');
             });
           }
         </script>
       </body>
       </html>
     `);
-  } catch (err) {
-    console.error('Admin error:', err);
+  } catch (e) {
+    console.error('Admin error:', e);
     res.status(500).send('خطأ في جلب الطلبات');
   }
 });
 
 
-// ======= مسارات الـ API =======
+// ===== مسارات الـ API =====
 
 // إضافة طلب جديد
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-  if (!name || !phone || !device || !code) {
-    return res.status(400).json({ error: 'بيانات ناقصة' });
+  if (!name||!phone||!device||!code) {
+    return res.status(400).json({ error:'بيانات ناقصة' });
   }
   try {
     const exist = await pool.query(
@@ -249,25 +253,25 @@ app.post('/api/order', async (req, res) => {
       [phone, code]
     );
     if (exist.rows.length) {
-      return res.status(400).json({ error: 'الطلب موجود مسبقاً' });
+      return res.status(400).json({ error:'الطلب موجود مسبقاً' });
     }
     await pool.query(
-      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [name, phone, device, cashPrice, installmentPrice, monthly, code]
+      `INSERT INTO orders (name,phone,device,cash_price,installment_price,monthly,order_code)
+       VALUES($1,$2,$3,$4,$5,$6,$7)`,
+      [name,phone,device,cashPrice,installmentPrice,monthly,code]
     );
-    res.json({ success: true });
+    res.json({ success:true });
   } catch (e) {
     console.error('Order insert error:', e);
-    res.status(500).json({ error: 'خطأ في معالجة الطلب' });
+    res.status(500).json({ error:'خطأ في معالجة الطلب' });
   }
 });
 
 // استعلام حالة الطلب
 app.post('/api/track-order', async (req, res) => {
   const { name, phone, code } = req.body;
-  if (!name || !phone || !code) {
-    return res.status(400).json({ success: false, error: 'بيانات ناقصة' });
+  if (!name||!phone||!code) {
+    return res.status(400).json({ success:false, error:'بيانات ناقصة' });
   }
   try {
     const result = await pool.query(
@@ -275,42 +279,42 @@ app.post('/api/track-order', async (req, res) => {
       [name, phone, code]
     );
     if (result.rows.length) {
-      return res.json({ success: true, status: result.rows[0].status });
+      return res.json({ success:true, status:result.rows[0].status });
     } else {
-      return res.json({ success: false });
+      return res.json({ success:false });
     }
   } catch (e) {
     console.error('Track-order error:', e);
-    res.status(500).json({ success: false, error: 'خطأ في الاستعلام' });
+    res.status(500).json({ success:false, error:'خطأ في الاستعلام' });
   }
 });
 
 // حذف طلب
 app.delete('/api/delete/:id', async (req, res) => {
-  if (!req.session.authenticated) return res.status(401).json({ error: 'Unauthorized' });
+  if (!req.session.authenticated) return res.status(401).json({ error:'Unauthorized' });
   try {
     await pool.query('DELETE FROM orders WHERE id=$1', [req.params.id]);
-    res.json({ success: true });
+    res.json({ success:true });
   } catch (e) {
     console.error('Delete error:', e);
-    res.status(500).json({ error: 'فشل في الحذف' });
+    res.status(500).json({ error:'فشل في الحذف' });
   }
 });
 
 // تحديث حالة الطلب (محمي بالجلسة)
 app.put('/api/status/:id', (req, res, next) => {
   if (!req.session.authenticated) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error:'Unauthorized' });
   }
   next();
 }, async (req, res) => {
   const { status } = req.body;
   try {
     await pool.query('UPDATE orders SET status=$1 WHERE id=$2', [status, req.params.id]);
-    res.json({ success: true });
+    res.json({ success:true });
   } catch (e) {
     console.error('Status update error:', e);
-    res.status(500).json({ error: 'فشل تحديث الحالة' });
+    res.status(500).json({ error:'فشل تحديث الحالة' });
   }
 });
 
