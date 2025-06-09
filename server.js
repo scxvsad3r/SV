@@ -69,10 +69,13 @@ app.get('/login', (req, res) => {
   `);
 });
 const axios = require('axios'); // تأكد من أنك أضفت axios في الأعلى
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
+
   if (username === 'admin' && password === 'dev2008') {
-        // لازم await يكون داخل دالة async ✅
+    req.session.authenticated = true;
+    req.session.username = 'سامر عبدالله';
+
     try {
       await axios.post('https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z', {
         content: `🛡️ تم تسجيل دخول الأدمن: ${req.session.username}\n🕒 الوقت: ${new Date().toLocaleString('ar-EG')}`
@@ -83,18 +86,9 @@ app.post('/login', (req, res) => {
 
     res.redirect('/admin');
   } else {
-    res.send('❌ بيانات غير صحيحة');
-  }
-});
-
-    req.session.authenticated = true;
-    req.session.username = 'سامر عبدالله'
-    res.redirect('/admin');
-  } else {
     res.redirect('/login?error=1');
   }
 });
-
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
