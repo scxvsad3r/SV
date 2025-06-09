@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 
 // إعداد CORS لدعم preflight وإرسال الكوكيز
 const corsOptions = {
-  origin: true,               // أو حدد الدومين الأساسي بدل true
+  origin: true,
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 };
@@ -55,11 +55,33 @@ pool.query(`
 // صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
+    <!DOCTYPE html>
     <html lang="ar" dir="rtl">
-      <head> … تصميم الصفحة … </head>
-      <body>
-        <form method="POST" action="/login"> … </form>
-      </body>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>تسجيل الدخول - 4 STORE</title>
+      <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
+      <style>
+        body { font-family: 'Almarai', sans-serif; background: linear-gradient(to right, #3b0a77, #845ec2); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; width: 350px; }
+        h2 { margin-bottom: 25px; color: #3b0a77; }
+        input, button { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; font-size: 15px; }
+        input { border: 1px solid #ccc; }
+        button { background: #3b0a77; color: white; border: none; }
+        button:hover { background: #5a22a1; }
+        .error { color: red; margin-bottom: 10px; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <form class="login-box" method="POST" action="/login">
+        <h2>تسجيل الدخول</h2>
+        ${req.query.error ? '<div class="error">بيانات الدخول غير صحيحة</div>' : ''}
+        <input type="text" name="username" placeholder="اسم المستخدم" required />
+        <input type="password" name="password" placeholder="كلمة المرور" required />
+        <button type="submit">دخول</button>
+      </form>
+    </body>
     </html>
   `);
 });
@@ -107,8 +129,12 @@ app.get('/admin', async (req, res) => {
     // بناء صفوف الجدول
     const rowsHtml = result.rows.map(o => `
       <tr>
-        <td>${o.name}</td><td>${o.phone}</td><td>${o.device}</td>
-        <td>${o.cash_price}</td><td>${o.installment_price}</td><td>${o.monthly}</td>
+        <td>${o.name}</td>
+        <td>${o.phone}</td>
+        <td>${o.device}</td>
+        <td>${o.cash_price}</td>
+        <td>${o.installment_price}</td>
+        <td>${o.monthly}</td>
         <td>${o.order_code}</td>
         <td>${new Date(o.created_at).toLocaleString()}</td>
         <td>
@@ -126,47 +152,80 @@ app.get('/admin', async (req, res) => {
     `).join('');
 
     res.send(`
+      <!DOCTYPE html>
       <html lang="ar" dir="rtl">
-        <head> … ربط الخطوط وأنماط CSS … </head>
-        <body>
-          <h1>طلبات iPhone</h1>
-          <a href="/logout">تسجيل خروج</a>
-          <form method="GET" action="/admin">
-            <input name="q" placeholder="بحث…" value="${q||''}">
-            <button>بحث</button>
-          </form>
-          <table>
-            <thead> … رؤوس الأعمدة … </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-          <script>
-            // حذف
-            function deleteOrder(id) {
-              if (!confirm('تأكيد الحذف؟')) return;
-              fetch('/api/delete/' + id, {
-                method: 'DELETE',
-                credentials: 'same-origin'
-              }).then(r => r.ok ? location.reload() : alert('فشل الحذف'));
-            }
-            // تحديث الحالة
-            function updateStatus(id, status) {
-              fetch('/api/status/' + id, {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
-              })
-              .then(res => {
-                if (res.status === 401) {
-                  alert('⚠️ الرجاء تسجيل الدخول');
-                  location.href = '/login';
-                } else if (!res.ok) {
-                  alert('❌ فشل في تحديث الحالة');
-                }
-              });
-            }
-          </script>
-        </body>
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>لوحة إدارة الطلبات - 4 STORE</title>
+        <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
+          h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1); }
+          th, td { padding: 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
+          th { background-color: #3b0a77; color: white; }
+          button { padding: 5px 10px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; }
+          .refresh-btn { display: block; margin: 0 auto 20px; padding: 10px 25px; background-color: #3b0a77; color: white; border: none; border-radius: 6px; }
+          .logout-link { text-align: center; margin-bottom: 15px; }
+          .logout-link a { color: #3b0a77; text-decoration: none; font-size: 15px; }
+          form.search { text-align: center; margin-bottom: 20px; }
+          form.search input { padding:10px; width: 300px; border-radius: 6px; border:1px solid #ccc; }
+          form.search button { padding: 10px 20px; background-color: #3b0a77; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        </style>
+      </head>
+      <body>
+        <h1>طلبات iPhone</h1>
+        <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username}</h2>
+        <div class="logout-link"><a href="/logout">🔓 تسجيل الخروج</a></div>
+        <form class="search" method="GET" action="/admin">
+          <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" value="${q||''}" />
+          <button type="submit">🔍 بحث</button>
+        </form>
+        <button class="refresh-btn" onclick="location.href='/admin'">🔄 تحديث الطلبات</button>
+        <table>
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الجوال</th>
+              <th>الجهاز</th>
+              <th>السعر كاش</th>
+              <th>السعر تقسيط</th>
+              <th>القسط الشهري</th>
+              <th>كود الطلب</th>
+              <th>الوقت</th>
+              <th>الحالة</th>
+              <th>حذف</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <script>
+          function deleteOrder(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            fetch('/api/delete/' + id, {
+              method: 'DELETE',
+              credentials: 'same-origin'
+            }).then(r => r.ok ? location.reload() : alert('فشل الحذف'));
+          }
+          function updateStatus(id, status) {
+            fetch('/api/status/' + id, {
+              method: 'PUT',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status })
+            })
+            .then(res => {
+              if (res.status === 401) {
+                alert('⚠️ الرجاء تسجيل الدخول');
+                location.href = '/login';
+              } else if (!res.ok) {
+                alert('❌ فشل في تحديث الحالة');
+              }
+            });
+          }
+        </script>
+      </body>
       </html>
     `);
   } catch (err) {
@@ -255,8 +314,7 @@ app.put('/api/status/:id', (req, res, next) => {
   }
 });
 
-
 // تشغيل السيرفر
 app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
+  console.log(`🚀 Server running at http://localhost:${port}`);
 });
