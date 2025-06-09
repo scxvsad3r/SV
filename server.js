@@ -72,6 +72,14 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
+    try {
+      await axios.post('https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z', {
+        content: `🛡️ تم تسجيل دخول الأدمن: ${req.session.username}\n🕒 الوقت: ${new Date().toLocaleString('ar-EG')}`
+      });
+    } catch (err) {
+      console.error('فشل إرسال إشعار إلى Discord:', err.message);
+    }
+
     req.session.authenticated = true;
     req.session.username = 'سامر عبدالله'
     res.redirect('/admin');
