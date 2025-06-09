@@ -7,11 +7,13 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// إعداد الاتصال بقاعدة PostgreSQL
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
+// إنشاء جدول الطلبات إذا لم يكن موجودًا
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -31,6 +33,7 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// إعداد الجلسات
 app.use(session({
   secret: 'secret-key',
   resave: false,
@@ -38,6 +41,7 @@ app.use(session({
   cookie: { secure: false, httpOnly: true }
 }));
 
+// صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -69,6 +73,7 @@ app.get('/login', (req, res) => {
   `);
 });
 
+// معالجة بيانات تسجيل الدخول
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
@@ -80,26 +85,29 @@ app.post('/login', (req, res) => {
   }
 });
 
+// تسجيل الخروج
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
   });
 });
 
+// لوحة إدارة الطلبات
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
   
   try {
-    let result;
     const searchQuery = req.query.q;
-    
+    let result;
+
     if (searchQuery) {
       const search = `%${searchQuery}%`;
-      result = await pool.query(`
-        SELECT * FROM orders
-        WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
-        ORDER BY created_at DESC
-      `, [search]);
+      result = await pool.query(
+        `SELECT * FROM orders
+         WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
+         ORDER BY created_at DESC`,
+        [search]
+      );
     } else {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     }
@@ -148,7 +156,7 @@ app.get('/admin', async (req, res) => {
         </head>
         <body>
           <h1>طلبات iPhone</h1>
-          <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username || ''}</h2>
+          <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username}</h2>
           <div class="logout-link"><a href="/logout">🔓 تسجيل الخروج</a></div>
           <form method="GET" action="/admin" style="text-align: center; margin-bottom: 20px;">
             <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" style="padding:10px; width: 300px; border-radius: 6px; border:1px solid #ccc;" value="${req.query.q || ''}" />
@@ -172,7 +180,6 @@ app.get('/admin', async (req, res) => {
             </thead>
             <tbody>${rows}</tbody>
           </table>
-
           <script>
             function deleteOrder(id) {
               if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
@@ -180,7 +187,6 @@ app.get('/admin', async (req, res) => {
                   .then(res => res.ok ? location.reload() : alert('حدث خطأ أثناء الحذف'));
               }
             }
-
             function updateStatus(id, status) {
               fetch('/api/status/' + id, {
                 method: 'PUT',
@@ -200,27 +206,25 @@ app.get('/admin', async (req, res) => {
   }
 });
 
+// مسار إضافة طلب جديد
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-  
   if (!name || !phone || !device || !code || phone.length < 8 || name.length < 2) {
     return res.status(400).json({ error: 'البيانات المدخلة غير صحيحة' });
   }
-  
   try {
-    const existing = await pool.query(`
-      SELECT * FROM orders WHERE phone = $1 AND order_code = $2
-    `, [phone, code]);
-    
+    const existing = await pool.query(
+      `SELECT * FROM orders WHERE phone = $1 AND order_code = $2`,
+      [phone, code]
+    );
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'تم تقديم هذا الطلب مسبقًا' });
     }
-    
-    await pool.query(`
-      INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
-    
+    await pool.query(
+      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [name, phone, device, cashPrice, installmentPrice, monthly, code]
+    );
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Database error:', err);
@@ -228,6 +232,29 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
+// مسار استعلام حالة الطلب
+app.post('/api/track-order', async (req, res) => {
+  const { name, phone, code } = req.body;
+  if (!name || !phone || !code) {
+    return res.status(400).json({ success: false, error: 'البيانات المدخلة غير كاملة' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT status FROM orders WHERE name = $1 AND phone = $2 AND order_code = $3`,
+      [name, phone, code]
+    );
+    if (result.rows.length > 0) {
+      res.json({ success: true, status: result.rows[0].status });
+    } else {
+      res.json({ success: false });
+    }
+  } catch (err) {
+    console.error('Error querying track-order:', err);
+    res.status(500).json({ success: false, error: 'حدث خطأ في الاستعلام' });
+  }
+});
+
+// مسار حذف طلب
 app.delete('/api/delete/:id', async (req, res) => {
   const id = req.params.id;
   try {
@@ -239,6 +266,7 @@ app.delete('/api/delete/:id', async (req, res) => {
   }
 });
 
+// مسار تحديث حالة الطلب
 app.put('/api/status/:id', async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -251,6 +279,7 @@ app.put('/api/status/:id', async (req, res) => {
   }
 });
 
+// تشغيل السيرفر
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
