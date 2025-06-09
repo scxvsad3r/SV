@@ -72,6 +72,7 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
+        // لازم await يكون داخل دالة async ✅
     try {
       await axios.post('https://discord.com/api/webhooks/1380965728668352644/ImB4sfkgPtAlzpTH4Uz6tVUaP4s5jZlZfTjfY8qN9PUYBj_e7XQZUAM9a4WY4v52oe4z', {
         content: `🛡️ تم تسجيل دخول الأدمن: ${req.session.username}\n🕒 الوقت: ${new Date().toLocaleString('ar-EG')}`
@@ -79,6 +80,12 @@ app.post('/login', (req, res) => {
     } catch (err) {
       console.error('فشل إرسال إشعار إلى Discord:', err.message);
     }
+
+    res.redirect('/admin');
+  } else {
+    res.send('❌ بيانات غير صحيحة');
+  }
+});
 
     req.session.authenticated = true;
     req.session.username = 'سامر عبدالله'
