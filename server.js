@@ -68,7 +68,7 @@ app.get('/login', (req, res) => {
     </html>
   `);
 });
-
+const axios = require('axios'); // تأكد من أنك أضفت axios في الأعلى
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
