@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -7,38 +8,39 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// إعداد CORS لدعم preflight وإرسال الكوكيز
+// ===== CORS & preflight setup =====
 const corsOptions = {
-  origin: true,                // أو استبدل true بدومين الواجهة الأمامية
+  origin: true,                // أو حدد دومين الواجهة الأمامية بدل true
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));  // يعالج جميع طلبات preflight
+app.options('*', cors(corsOptions));
 
-// تحليل جسم الطلبات
+// ===== Body & Cookie parsers =====
+app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// إعداد الجلسات مع sameSite
+// ===== Session setup =====
 app.use(session({
   secret: 'secret-key',
   resave: false,
   saveUninitialized: true,
   cookie: {
-    secure: false,     // في production وHTTPS جعلها true
+    secure: false,   // في production مع HTTPS: true
     httpOnly: true,
-    sameSite: 'lax'    // مهم لإرسال الكوكي
+    sameSite: 'lax'
   }
 }));
 
-// إعداد الاتصال بقاعدة PostgreSQL
+// ===== PostgreSQL pool =====
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات إن لم يكن موجوداً
+// Create orders table if not exists
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -52,12 +54,11 @@ pool.query(`
     status TEXT DEFAULT 'قيد المراجعة',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )
-`).catch(e => console.error('Table creation error:', e));
+`).catch(err => console.error('Table creation error:', err));
 
+// ===== Authentication routes =====
 
-// ===== مسارات المصادقة =====
-
-// صفحة تسجيل الدخول
+// Login page
 app.get('/login', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -91,28 +92,23 @@ app.get('/login', (req, res) => {
   `);
 });
 
-// معالجة تسجيل الدخول
+// Handle login
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
     req.session.authenticated = true;
     req.session.username = 'سامر عبدالله';
-    res.redirect('/admin');
-  } else {
-    res.redirect('/login?error=1');
+    return res.redirect('/admin');
   }
+  res.redirect('/login?error=1');
 });
 
-// تسجيل الخروج
+// Logout
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/login');
-  });
+  req.session.destroy(() => res.redirect('/login'));
 });
 
-
-// ===== لوحة الإدارة =====
-
+// ===== Admin dashboard =====
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
   try {
@@ -123,7 +119,8 @@ app.get('/admin', async (req, res) => {
       result = await pool.query(
         `SELECT * FROM orders
          WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
-         ORDER BY created_at DESC`, [like]
+         ORDER BY created_at DESC`,
+        [like]
       );
     } else {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
@@ -147,9 +144,7 @@ app.get('/admin', async (req, res) => {
             <option value="مرفوض"        ${o.status==='مرفوض'?'selected':''}>مرفوض</option>
           </select>
         </td>
-        <td>
-          <button onclick="deleteOrder(${o.id})">حذف</button>
-        </td>
+        <td><button onclick="deleteOrder(${o.id})">حذف</button></td>
       </tr>
     `).join('');
 
@@ -212,6 +207,7 @@ app.get('/admin', async (req, res) => {
               body: JSON.stringify({ status })
             })
             .then(async res => {
+              console.log('Response status:', res.status);
               if (res.status === 401) {
                 alert('⚠️ الرجاء تسجيل الدخول');
                 return location.href = '/login';
@@ -224,7 +220,7 @@ app.get('/admin', async (req, res) => {
               console.log('✅ تم تحديث الحالة');
             })
             .catch(err => {
-              console.error(err);
+              console.error('Fetch/updateStatus error:', err);
               alert('❌ فشل في تحديث الحالة، راجع الكونسول.');
             });
           }
@@ -232,20 +228,19 @@ app.get('/admin', async (req, res) => {
       </body>
       </html>
     `);
-  } catch (e) {
-    console.error('Admin error:', e);
+  } catch (err) {
+    console.error('Admin fetch error:', err);
     res.status(500).send('خطأ في جلب الطلبات');
   }
 });
 
+// ===== API routes =====
 
-// ===== مسارات الـ API =====
-
-// إضافة طلب جديد
+// Add new order
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-  if (!name||!phone||!device||!code) {
-    return res.status(400).json({ error:'بيانات ناقصة' });
+  if (!name || !phone || !device || !code) {
+    return res.status(400).json({ error: 'بيانات ناقصة' });
   }
   try {
     const exist = await pool.query(
@@ -253,25 +248,25 @@ app.post('/api/order', async (req, res) => {
       [phone, code]
     );
     if (exist.rows.length) {
-      return res.status(400).json({ error:'الطلب موجود مسبقاً' });
+      return res.status(400).json({ error: 'الطلب موجود مسبقاً' });
     }
     await pool.query(
-      `INSERT INTO orders (name,phone,device,cash_price,installment_price,monthly,order_code)
-       VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [name,phone,device,cashPrice,installmentPrice,monthly,code]
+      `INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [name, phone, device, cashPrice, installmentPrice, monthly, code]
     );
-    res.json({ success:true });
+    res.json({ success: true });
   } catch (e) {
     console.error('Order insert error:', e);
-    res.status(500).json({ error:'خطأ في معالجة الطلب' });
+    res.status(500).json({ error: 'خطأ في معالجة الطلب' });
   }
 });
 
-// استعلام حالة الطلب
+// Track order status
 app.post('/api/track-order', async (req, res) => {
   const { name, phone, code } = req.body;
-  if (!name||!phone||!code) {
-    return res.status(400).json({ success:false, error:'بيانات ناقصة' });
+  if (!name || !phone || !code) {
+    return res.status(400).json({ success: false, error: 'بيانات ناقصة' });
   }
   try {
     const result = await pool.query(
@@ -279,46 +274,52 @@ app.post('/api/track-order', async (req, res) => {
       [name, phone, code]
     );
     if (result.rows.length) {
-      return res.json({ success:true, status:result.rows[0].status });
+      return res.json({ success: true, status: result.rows[0].status });
     } else {
-      return res.json({ success:false });
+      return res.json({ success: false });
     }
   } catch (e) {
     console.error('Track-order error:', e);
-    res.status(500).json({ success:false, error:'خطأ في الاستعلام' });
+    res.status(500).json({ success: false, error: 'خطأ في الاستعلام' });
   }
 });
 
-// حذف طلب
+// Delete order
 app.delete('/api/delete/:id', async (req, res) => {
-  if (!req.session.authenticated) return res.status(401).json({ error:'Unauthorized' });
+  if (!req.session.authenticated) return res.status(401).json({ error: 'Unauthorized' });
   try {
     await pool.query('DELETE FROM orders WHERE id=$1', [req.params.id]);
-    res.json({ success:true });
+    res.json({ success: true });
   } catch (e) {
     console.error('Delete error:', e);
-    res.status(500).json({ error:'فشل في الحذف' });
+    res.status(500).json({ error: 'فشل في الحذف' });
   }
 });
 
-// تحديث حالة الطلب (محمي بالجلسة)
+// Update order status (protected)
 app.put('/api/status/:id', (req, res, next) => {
+  console.log('Session on update:', req.session);
   if (!req.session.authenticated) {
-    return res.status(401).json({ error:'Unauthorized' });
+    console.log('🛑 Unauthorized attempt to update status');
+    return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
 }, async (req, res) => {
-  const { status } = req.body;
+  console.log('🔄 PUT /api/status/', req.params.id, 'body:', req.body);
   try {
-    await pool.query('UPDATE orders SET status=$1 WHERE id=$2', [status, req.params.id]);
-    res.json({ success:true });
+    await pool.query(
+      'UPDATE orders SET status=$1 WHERE id=$2',
+      [req.body.status, req.params.id]
+    );
+    console.log('✅ Status updated in DB');
+    res.json({ success: true });
   } catch (e) {
     console.error('Status update error:', e);
-    res.status(500).json({ error:'فشل تحديث الحالة' });
+    res.status(500).json({ error: 'فشل تحديث الحالة' });
   }
 });
 
-// تشغيل السيرفر
+// ===== Start server =====
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
