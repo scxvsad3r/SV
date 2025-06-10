@@ -73,14 +73,14 @@ app.post('/login', (req, res) => {
   const { username, password } = req.body;
 
   const users = {
-    'admin': { password: 'dev2008', name: 'سامر عبدالله' },
-    'mod': { password: 'mod2004', name: 'عبد الرحمن خالد' }
+    'admin': { password: 'dev2008', name: 'سامر' },
+    'mod': { password: 'mod2004', name: 'عبد الرحمن' }
   };
 
   if (users[username] && users[username].password === password) {
     req.session.authenticated = true;
     req.session.username = users[username].name;
-    req.session.role = username; // either 'admin' or 'mod'
+    req.session.role = username;
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
@@ -186,7 +186,14 @@ app.get('/admin', async (req, res) => {
             function deleteOrder(id) {
               if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
                 fetch('/api/delete/' + id, { method: 'DELETE' })
-                  .then(res => res.ok ? location.reload() : alert('حدث خطأ أثناء الحذف'));
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.success) {
+                      location.reload();
+                    } else {
+                      alert(data.error || 'فشل في الحذف');
+                    }
+                  });
               }
             }
 
@@ -195,9 +202,10 @@ app.get('/admin', async (req, res) => {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
-              }).then(res => {
-                if (!res.ok) alert('فشل في تحديث الحالة');
-              });
+              }).then(res => res.json())
+                .then(data => {
+                  if (!data.success) alert(data.error || 'فشل في تحديث الحالة');
+                });
             }
           </script>
         </body>
@@ -238,6 +246,10 @@ app.post('/api/order', async (req, res) => {
 });
 
 app.delete('/api/delete/:id', async (req, res) => {
+  if (req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'ليس لديك صلاحية لحذف الطلب' });
+  }
+
   const id = req.params.id;
   try {
     await pool.query('DELETE FROM orders WHERE id = $1', [id]);
@@ -249,6 +261,10 @@ app.delete('/api/delete/:id', async (req, res) => {
 });
 
 app.put('/api/status/:id', async (req, res) => {
+  if (req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'ليس لديك صلاحية لتحديث الحالة' });
+  }
+
   const id = req.params.id;
   const { status } = req.body;
   try {
