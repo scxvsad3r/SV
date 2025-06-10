@@ -71,9 +71,16 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === 'admin' && password === 'dev2008') {
+
+  const users = {
+    'admin': { password: 'dev2008', name: 'سامر' },
+    'mod': { password: 'mod2004', name: 'عبد الرحمن' }
+  };
+
+  if (users[username] && users[username].password === password) {
     req.session.authenticated = true;
-    req.session.username = 'سامر عبدالله';
+    req.session.username = users[username].name;
+    req.session.role = username; // either 'admin' or 'mod'
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
@@ -88,11 +95,11 @@ app.get('/logout', (req, res) => {
 
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
-  
+
   try {
     let result;
     const searchQuery = req.query.q;
-    
+
     if (searchQuery) {
       const search = `%${searchQuery}%`;
       result = await pool.query(`
@@ -103,7 +110,7 @@ app.get('/admin', async (req, res) => {
     } else {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     }
-    
+
     const rows = result.rows.map(order => `
       <tr>
         <td>${order.name}</td>
@@ -115,19 +122,21 @@ app.get('/admin', async (req, res) => {
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString()}</td>
         <td>
-          <select onchange="updateStatus(${order.id}, this.value)">
-            <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
-            <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
-            <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
-            <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
-          </select>
+          ${req.session.role === 'admin' ? `
+            <select onchange="updateStatus(${order.id}, this.value)">
+              <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
+              <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
+              <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+              <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
+            </select>
+          ` : order.status}
         </td>
         <td>
-          <button onclick="deleteOrder(${order.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">حذف</button>
+          ${req.session.role === 'admin' ? `<button onclick="deleteOrder(${order.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">حذف</button>` : '—'}
         </td>
       </tr>
     `).join('');
-    
+
     res.send(`
       <html lang="ar" dir="rtl">
         <head>
@@ -202,25 +211,25 @@ app.get('/admin', async (req, res) => {
 
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-  
+
   if (!name || !phone || !device || !code || phone.length < 8 || name.length < 2) {
     return res.status(400).json({ error: 'البيانات المدخلة غير صحيحة' });
   }
-  
+
   try {
     const existing = await pool.query(`
       SELECT * FROM orders WHERE phone = $1 AND order_code = $2
     `, [phone, code]);
-    
+
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'تم تقديم هذا الطلب مسبقًا' });
     }
-    
+
     await pool.query(`
       INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
-    
+
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Database error:', err);
