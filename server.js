@@ -126,6 +126,17 @@ app.get('/admin', async (req, res) => {
       th { background-color: #3b0a77; color: white; }
       button { padding: 5px 10px; border: none; border-radius: 6px; cursor: pointer; }
     </style></head>
+           <style>
+            body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
+            h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1); }
+            th, td { padding: 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
+            th { background-color: #3b0a77; color: white; }
+            button { padding: 5px 10px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; }
+            .refresh-btn { display: block; margin: 0 auto 20px; padding: 10px 25px; background-color: #3b0a77; color: white; }
+            .logout-link { text-align: center; margin-bottom: 15px; }
+            .logout-link a { color: #3b0a77; text-decoration: none; font-size: 15px; }
+          </style>
        <style>
             body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
             h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
