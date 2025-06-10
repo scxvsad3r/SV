@@ -73,8 +73,8 @@ app.post('/login', (req, res) => {
   const { username, password } = req.body;
 
   const users = {
-    'admin': { password: 'dev2008', name: 'سامر' },
-    'mod': { password: 'mod2004', name: 'عبد الرحمن' }
+    'admin': { password: 'dev2008', name: 'سامر عبدالله' },
+    'mod': { password: 'mod2004', name: 'عبد الرحمن خالد' }
   };
 
   if (users[username] && users[username].password === password) {
