@@ -38,6 +38,7 @@ app.use(session({
   cookie: { secure: false, httpOnly: true }
 }));
 
+// صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -69,6 +70,7 @@ app.get('/login', (req, res) => {
   `);
 });
 
+// تحقق تسجيل الدخول
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
 
@@ -80,19 +82,21 @@ app.post('/login', (req, res) => {
   if (users[username] && users[username].password === password) {
     req.session.authenticated = true;
     req.session.username = users[username].name;
-    req.session.role = username; // either 'admin' or 'mod'
+    req.session.role = username;
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
   }
 });
 
+// تسجيل الخروج
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
   });
 });
 
+// لوحة الإدارة
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
 
@@ -122,17 +126,17 @@ app.get('/admin', async (req, res) => {
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString()}</td>
         <td>
-          ${req.session.role === 'admin' ? `
-            <select onchange="updateStatus(${order.id}, this.value)">
-              <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
-              <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
-              <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
-              <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
-            </select>
-          ` : order.status}
+          <select onchange="${req.session.role === 'admin' ? `updateStatus(${order.id}, this.value)` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
+            <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
+            <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
+            <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+            <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
+          </select>
         </td>
         <td>
-          ${req.session.role === 'admin' ? `<button onclick="deleteOrder(${order.id})" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">حذف</button>` : '—'}
+          <button onclick="${req.session.role === 'admin' ? `deleteOrder(${order.id})` : `alert('ليس لديك صلاحية لحذف الطلب')`}" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">
+            حذف
+          </button>
         </td>
       </tr>
     `).join('');
@@ -184,10 +188,8 @@ app.get('/admin', async (req, res) => {
 
           <script>
             function deleteOrder(id) {
-              if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
-                fetch('/api/delete/' + id, { method: 'DELETE' })
-                  .then(res => res.ok ? location.reload() : alert('حدث خطأ أثناء الحذف'));
-              }
+              fetch('/api/delete/' + id, { method: 'DELETE' })
+                .then(res => res.ok ? location.reload() : alert('ليس لديك صلاحية أو حدث خطأ أثناء الحذف'));
             }
 
             function updateStatus(id, status) {
@@ -196,7 +198,7 @@ app.get('/admin', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
               }).then(res => {
-                if (!res.ok) alert('فشل في تحديث الحالة');
+                if (!res.ok) alert('ليس لديك صلاحية لتحديث الحالة أو فشل في العملية');
               });
             }
           </script>
@@ -209,6 +211,7 @@ app.get('/admin', async (req, res) => {
   }
 });
 
+// إرسال طلب جديد
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
 
@@ -237,10 +240,14 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
+// حذف الطلب (لـ admin فقط)
 app.delete('/api/delete/:id', async (req, res) => {
-  const id = req.params.id;
+  if (req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'ليس لديك صلاحية' });
+  }
+
   try {
-    await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+    await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Delete error:', err);
@@ -248,11 +255,15 @@ app.delete('/api/delete/:id', async (req, res) => {
   }
 });
 
+// تحديث الحالة (لـ admin فقط)
 app.put('/api/status/:id', async (req, res) => {
-  const id = req.params.id;
+  if (req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'ليس لديك صلاحية' });
+  }
+
   const { status } = req.body;
   try {
-    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, id]);
+    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, req.params.id]);
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Status update error:', err);
@@ -260,8 +271,7 @@ app.put('/api/status/:id', async (req, res) => {
   }
 });
 
+// بدء الخادم
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
-
-
