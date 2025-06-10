@@ -38,6 +38,7 @@ app.use(session({
   cookie: { secure: false, httpOnly: true }
 }));
 
+// صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -69,9 +70,9 @@ app.get('/login', (req, res) => {
   `);
 });
 
+// تحقق تسجيل الدخول
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-
   const users = {
     'admin': { password: 'dev2008', name: 'سامر' },
     'mod': { password: 'mod2004', name: 'عبد الرحمن' }
@@ -80,26 +81,27 @@ app.post('/login', (req, res) => {
   if (users[username] && users[username].password === password) {
     req.session.authenticated = true;
     req.session.username = users[username].name;
-    req.session.role = username; // either 'admin' or 'mod'
+    req.session.role = username;
     res.redirect('/admin');
   } else {
     res.redirect('/login?error=1');
   }
 });
 
+// تسجيل الخروج
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
   });
 });
 
+// صفحة الإدارة
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
 
   try {
     let result;
     const searchQuery = req.query.q;
-
     if (searchQuery) {
       const search = `%${searchQuery}%`;
       result = await pool.query(`
@@ -144,26 +146,22 @@ app.get('/admin', async (req, res) => {
           <title>لوحة إدارة الطلبات</title>
           <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
           <style>
-            body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
-            h1 { text-align: center; color: #3b0a77; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1); }
+            body { font-family: 'Almarai', sans-serif; padding: 30px; background: #f5f7fa; direction: rtl; }
+            h1 { text-align: center; color: #3b0a77; }
+            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
             th, td { padding: 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
             th { background-color: #3b0a77; color: white; }
-            button { padding: 5px 10px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; }
-            .refresh-btn { display: block; margin: 0 auto 20px; padding: 10px 25px; background-color: #3b0a77; color: white; }
             .logout-link { text-align: center; margin-bottom: 15px; }
-            .logout-link a { color: #3b0a77; text-decoration: none; font-size: 15px; }
           </style>
         </head>
         <body>
           <h1>طلبات iPhone</h1>
-          <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username || ''}</h2>
+          <h2 style="text-align:center; color:#5a22a1;">مرحبًا ${req.session.username}</h2>
           <div class="logout-link"><a href="/logout">🔓 تسجيل الخروج</a></div>
-          <form method="GET" action="/admin" style="text-align: center; margin-bottom: 20px;">
-            <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" style="padding:10px; width: 300px; border-radius: 6px; border:1px solid #ccc;" value="${req.query.q || ''}" />
-            <button type="submit" style="padding: 10px 20px; background-color: #3b0a77; color: white; border: none; border-radius: 6px;">🔍 بحث</button>
+          <form method="GET" action="/admin" style="text-align:center; margin-bottom:20px;">
+            <input type="text" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" style="padding:10px; width:300px; border-radius:6px;" value="${req.query.q || ''}" />
+            <button type="submit">🔍 بحث</button>
           </form>
-          <button class="refresh-btn" onclick="location.href='/admin'">🔄 تحديث الطلبات</button>
           <table>
             <thead>
               <tr>
@@ -186,7 +184,10 @@ app.get('/admin', async (req, res) => {
             function deleteOrder(id) {
               if (confirm('هل أنت متأكد أنك تريد حذف هذا الطلب؟')) {
                 fetch('/api/delete/' + id, { method: 'DELETE' })
-                  .then(res => res.ok ? location.reload() : alert('حدث خطأ أثناء الحذف'));
+                  .then(res => {
+                    if (res.ok) location.reload();
+                    else res.json().then(data => alert(data.error || 'حدث خطأ أثناء الحذف'));
+                  });
               }
             }
 
@@ -196,7 +197,9 @@ app.get('/admin', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
               }).then(res => {
-                if (!res.ok) alert('فشل في تحديث الحالة');
+                if (!res.ok) {
+                  res.json().then(data => alert(data.error || 'فشل في تحديث الحالة'));
+                }
               });
             }
           </script>
@@ -209,6 +212,7 @@ app.get('/admin', async (req, res) => {
   }
 });
 
+// إرسال الطلب
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
 
@@ -217,10 +221,7 @@ app.post('/api/order', async (req, res) => {
   }
 
   try {
-    const existing = await pool.query(`
-      SELECT * FROM orders WHERE phone = $1 AND order_code = $2
-    `, [phone, code]);
-
+    const existing = await pool.query(`SELECT * FROM orders WHERE phone = $1 AND order_code = $2`, [phone, code]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'تم تقديم هذا الطلب مسبقًا' });
     }
@@ -237,7 +238,12 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
+// حذف الطلب (للمشرف فقط)
 app.delete('/api/delete/:id', async (req, res) => {
+  if (!req.session.authenticated || req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'ليس لديك صلاحية للحذف' });
+  }
+
   const id = req.params.id;
   try {
     await pool.query('DELETE FROM orders WHERE id = $1', [id]);
@@ -248,7 +254,12 @@ app.delete('/api/delete/:id', async (req, res) => {
   }
 });
 
+// تحديث الحالة (للمشرف فقط)
 app.put('/api/status/:id', async (req, res) => {
+  if (!req.session.authenticated || req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'ليس لديك صلاحية لتحديث الحالة' });
+  }
+
   const id = req.params.id;
   const { status } = req.body;
   try {
