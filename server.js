@@ -13,7 +13,7 @@ const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/xxxxxxxxxxxxxxxx';
 
 // ✅ إعداد الاتصال بقاعدة PostgreSQL (Railway)
 const pool = new Pool({
-  connectionString: 'postgresql://postgres:xxx@xxx.rwlwy.net:xxxxx/railway',
+  connectionString: 'postgresql://postgres:SzHsAtlPNVDizATGRQhkCsxhjLrJcfvz@trolley.proxy.rlwy.net:46519/railway',
   ssl: { rejectUnauthorized: false }
 });
 
