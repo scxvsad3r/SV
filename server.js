@@ -1,6 +1,5 @@
 const express = require('express');
 const session = require('express-session');
-const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -8,11 +7,22 @@ const fetch = require('node-fetch');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// بيانات الاتصال
+// ✅ روابطك (عدّلها)
 const DISCORD_WEBHOOK_URL = 'رابط_الويب_هوك_الخاص_بك';
 const DATABASE_URL = 'رابط_قاعدة_البيانات_الخاصة_بك';
 
-// Discord Logger
+// ✅ إعدادات Express
+app.use(cors());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(session({
+  secret: 'secret-key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false, httpOnly: true } // غيّر إلى secure: true لو كنت تستخدم HTTPS
+}));
+
+// ✅ دالة إرسال إلى Discord
 async function sendDiscordLog(message) {
   try {
     await fetch(DISCORD_WEBHOOK_URL, {
@@ -25,13 +35,13 @@ async function sendDiscordLog(message) {
   }
 }
 
-// قاعدة البيانات
+// ✅ الاتصال بقاعدة البيانات
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات
+// ✅ إنشاء جدول الطلبات إذا لم يكن موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -47,28 +57,18 @@ pool.query(`
   )
 `).catch(console.error);
 
-// إعدادات السيرفر
-app.use(cors());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(session({
-  secret: 'secret-key',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false, httpOnly: true }
-}));
-
-// تسجيل دخول وهمي
+// ✅ حسابات الدخول
 const users = {
   'admin': { password: 'dev2008', name: 'سامر عبدالله' },
   'mod': { password: 'mod2004', name: 'عبد الرحمن خالد' }
 };
 
-// صفحة تسجيل الدخول
+// ✅ صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   const error = req.query.error ? '<p style="color:red;">اسم المستخدم أو كلمة المرور خاطئة</p>' : '';
   res.send(`
-    <html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول</title></head>
+    <html lang="ar" dir="rtl">
+    <head><meta charset="UTF-8"><title>تسجيل الدخول</title></head>
     <body style="text-align:center;font-family:sans-serif;">
       <h2>تسجيل الدخول</h2>
       ${error}
@@ -77,28 +77,31 @@ app.get('/login', (req, res) => {
         <input name="password" type="password" placeholder="كلمة المرور" required /><br><br>
         <button type="submit">دخول</button>
       </form>
-    </body></html>
+    </body>
+    </html>
   `);
 });
 
-// تسجيل الدخول
+// ✅ معالجة تسجيل الدخول
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
+
+  console.log('🧪 بيانات الدخول:', username, password); // للمساعدة في التصحيح
 
   if (users[username] && users[username].password === password) {
     req.session.authenticated = true;
     req.session.username = users[username].name;
     req.session.role = username;
 
-    await sendDiscordLog(`🔐 دخول: ${users[username].name}`);
+    await sendDiscordLog(`✅ دخول ناجح: ${users[username].name}`);
     return res.redirect('/admin');
   } else {
-    await sendDiscordLog(`🚫 محاولة دخول فاشلة باسم: \`${username}\``);
+    await sendDiscordLog(`❌ محاولة دخول فاشلة باسم: \`${username}\``);
     return res.redirect('/login?error=1');
   }
 });
 
-// تسجيل الخروج
+// ✅ تسجيل الخروج
 app.get('/logout', async (req, res) => {
   if (req.session.authenticated) {
     await sendDiscordLog(`🔓 خروج: ${req.session.username}`);
@@ -106,25 +109,27 @@ app.get('/logout', async (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
-// حماية المسارات
+// ✅ التحقق من تسجيل الدخول
 function requireAuth(req, res, next) {
   if (req.session.authenticated) return next();
   res.redirect('/login');
 }
 
-// لوحة الإدارة
+// ✅ صفحة لوحة التحكم
 app.get('/admin', requireAuth, async (req, res) => {
   const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
   const rows = result.rows.map(order => `
     <tr>
       <td>${order.name}</td><td>${order.phone}</td><td>${order.device}</td>
       <td>${order.cash_price}</td><td>${order.installment_price}</td><td>${order.monthly}</td>
-      <td>${order.order_code}</td><td>${order.status}</td><td>${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}</td>
+      <td>${order.order_code}</td><td>${order.status}</td>
+      <td>${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}</td>
     </tr>
   `).join('');
 
   res.send(`
-    <html dir="rtl"><head><meta charset="UTF-8"><title>لوحة الإدارة</title></head>
+    <html dir="rtl">
+    <head><meta charset="UTF-8"><title>لوحة الإدارة</title></head>
     <body style="font-family:sans-serif;">
       <h1>لوحة التحكم - ${req.session.username}</h1>
       <table border="1" cellpadding="5"><tr>
@@ -133,11 +138,12 @@ app.get('/admin', requireAuth, async (req, res) => {
         <th>الكود</th><th>الحالة</th><th>تاريخ</th>
       </tr>${rows}</table>
       <br><a href="/logout">تسجيل الخروج</a>
-    </body></html>
+    </body>
+    </html>
   `);
 });
 
-// واجهة استعلام الطلبات (tak.js)
+// ✅ واجهة استعلام الطلبات
 app.post('/api/track', async (req, res) => {
   const { name, phone, code } = req.body;
 
@@ -169,4 +175,5 @@ app.post('/api/track', async (req, res) => {
   }
 });
 
+// ✅ بدء السيرفر
 app.listen(port, () => console.log(`🚀 السيرفر يعمل على http://localhost:${port}`));
