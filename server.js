@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
@@ -8,16 +9,28 @@ const fetch = require('node-fetch');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ✅ رابط Webhook خاص بديسكورد
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/xxxxxxxxxxxxxxxx';
+const DISCORD_WEBHOOK_URL = 'رابط_الويب_هوك_الخاص_بك';
 
-// ✅ إعداد الاتصال بقاعدة PostgreSQL (Railway)
+// إرسال لوق بسيط إلى ديسكورد
+async function sendDiscordLog(message) {
+  try {
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
+    });
+  } catch (err) {
+    console.error('فشل في إرسال رسالة إلى Discord:', err);
+  }
+}
+
+// الاتصال بقاعدة البيانات
 const pool = new Pool({
-  connectionString: 'postgresql://postgres:SzHsAtlPNVDizATGRQhkCsxhjLrJcfvz@trolley.proxy.rlwy.net:46519/railway',
+  connectionString: 'رابط_قاعدة_البيانات_الخاصة_بك',
   ssl: { rejectUnauthorized: false }
 });
 
-// ✅ إنشاء جدول الطلبات إذا لم يكن موجودًا
+// إنشاء جدول الطلبات إذا لم يكن موجودًا
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -33,49 +46,24 @@ pool.query(`
   )
 `).catch(console.error);
 
-// ✅ وسطيات
+// إعدادات السيرفر
 app.use(cors());
-app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
+app.use(bodyParser.json());
 app.use(session({
   secret: 'secret-key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false }
+  cookie: { secure: false, httpOnly: true }
 }));
 
-// ✅ دالة إرسال إلى Discord
-async function sendDiscordLog(message) {
-  try {
-    await fetch(DISCORD_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: message })
-    });
-  } catch (err) {
-    console.error('Discord error:', err);
-  }
-}
-
-// ✅ إرسال Embed Log
-async function sendEmbed(embed) {
-  try {
-    await fetch(DISCORD_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(embed)
-    });
-  } catch (err) {
-    console.error('Discord Embed Error:', err);
-  }
-}
-
-// ✅ استقبال الطلب من الواجهة
+// استقبال الطلب الجديد
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-  if (!name || !phone || !device || !cashPrice || !installmentPrice || !monthly || !code)
-    return res.status(400).json({ message: 'بيانات الطلب ناقصة' });
+
+  if (!name || !phone || !device || !cashPrice || !installmentPrice || !monthly || !code) {
+    return res.status(400).json({ message: 'بيانات الطلب غير كاملة' });
+  }
 
   try {
     const result = await pool.query(`
@@ -84,149 +72,149 @@ app.post('/api/order', async (req, res) => {
       RETURNING id, created_at
     `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
 
-    await sendDiscordLog(`📦 طلب جديد:
-• الاسم: **${name}**
-• الجوال: **${phone}**
-• الجهاز: **${device}**
-• كود الطلب: **${code}**`);
-
-    res.status(201).json({ message: 'تم إرسال الطلب بنجاح', orderId: result.rows[0].id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'خطأ داخلي في السيرفر' });
-  }
-});
-
-// ✅ استعلام عن الطلب
-app.post('/api/track', async (req, res) => {
-  const { name, phone, code } = req.body;
-  if (!name || !phone || !code)
-    return res.status(400).json({ message: 'البيانات ناقصة' });
-
-  try {
-    const result = await pool.query(
-      'SELECT created_at, status FROM orders WHERE name=$1 AND phone=$2 AND order_code=$3',
-      [name.trim(), phone.trim(), code.trim()]
-    );
-
-    if (result.rowCount === 0)
-      return res.status(404).json({ message: '🚫 لا يوجد طلب مطابق للمعلومات المدخلة.' });
-
     const order = result.rows[0];
-    const elapsed = Date.now() - new Date(order.created_at).getTime();
-    let status = order.status;
 
-    if (status === 'قيد المراجعة') {
-      if (elapsed >= 4 * 3600000) status = 'تم التنفيذ';
-      else if (elapsed >= 3 * 3600000) status = 'تم فتح الطلب';
-      else if (elapsed >= 2 * 3600000) status = 'قيد التنفيذ';
-    }
+    await sendDiscordLog(`📦 طلب جديد  
+• الاسم: **${name}**  
+• جوال: **${phone}**  
+• جهاز: **${device}**  
+• كود الطلب: **${code}**  
+• الوقت: ${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}`);
 
-    res.json({ message: `مرحباً: ${name}،\n\nحالة طلبك : ${status}`, status: 'success' });
+    res.status(201).json({ message: 'تم استلام الطلب بنجاح', orderId: order.id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'حدث خطأ أثناء الاستعلام' });
+    res.status(500).json({ message: 'خطأ في السيرفر أثناء معالجة الطلب' });
   }
 });
 
-// ✅ صفحة تسجيل الدخول (GET)
+// تسجيل الدخول
 app.get('/login', (req, res) => {
-  res.send(/* صفحة تسجيل دخول HTML كما في الكود السابق */);
+  res.send(`
+    <html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول</title></head>
+    <body><form method="POST" action="/login">
+      <input name="username" placeholder="اسم المستخدم" />
+      <input name="password" type="password" placeholder="كلمة المرور" />
+      <button type="submit">دخول</button>
+    </form></body></html>
+  `);
 });
 
-// ✅ POST لتسجيل الدخول
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const users = {
-    admin: { password: 'dev2008', name: 'سامر عبدالله' },
-    mod: { password: 'mod2004', name: 'عبد الرحمن خالد' }
+    'admin': { password: 'dev2008', name: 'سامر عبدالله' },
+    'mod':   { password: 'mod2004', name: 'عبد الرحمن خالد' }
   };
-
   if (users[username] && users[username].password === password) {
     req.session.authenticated = true;
     req.session.username = users[username].name;
     req.session.role = username;
-
-    const embed = {
-      embeds: [
-        {
-          title: "🔐 تسجيل دخول",
-          color: 0x6A0DAD,
-          fields: [
-            { name: "المستخدم", value: users[username].name, inline: true },
-            { name: "الدور", value: username, inline: true },
-            { name: "الوقت", value: new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' }) }
-          ]
-        }
-      ]
-    };
-    await sendEmbed(embed);
     return res.redirect('/admin');
+  } else {
+    await sendDiscordLog(`🚫 محاولة تسجيل دخول فاشلة باسم: \`${username}\``);
+    return res.redirect('/login?error=1');
   }
-
-  await sendDiscordLog(`🚫 محاولة دخول فاشلة باسم: \`${username}\``);
-  res.redirect('/login?error=1');
 });
 
-// ✅ تسجيل الخروج
+// تسجيل الخروج
 app.get('/logout', async (req, res) => {
   if (req.session.authenticated) {
-    await sendDiscordLog(`🔓 خروج: ${req.session.username}`);
+    await sendDiscordLog(`🔓 تسجيل خروج: **${req.session.username}**`);
   }
   req.session.destroy(() => res.redirect('/login'));
 });
 
-// ✅ حماية المسارات
+// حماية المسارات
 function requireAuth(req, res, next) {
   if (req.session.authenticated) return next();
   res.redirect('/login');
 }
 
-// ✅ لوحة الإدارة
+// لوحة الإدارة
 app.get('/admin', requireAuth, async (req, res) => {
-  // كما في كودك الأصلي تمامًا (عرض الطلبات + البحث + صلاحيات)
+  const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+  const rows = result.rows.map(order => `
+    <tr>
+      <td>${order.name}</td><td>${order.phone}</td><td>${order.device}</td>
+      <td>${order.cash_price}</td><td>${order.installment_price}</td><td>${order.monthly}</td>
+      <td>${order.order_code}</td><td>${order.status}</td>
+    </tr>
+  `).join('');
+
+  res.send(`
+    <html dir="rtl"><head><meta charset="UTF-8"><title>لوحة الإدارة</title></head>
+    <body><h1>لوحة التحكم</h1><table border="1">${rows}</table><a href="/logout">خروج</a></body></html>
+  `);
 });
 
-// ✅ تحديث حالة الطلب
+// تحديث الحالة
 app.put('/order/:id/status', requireAuth, async (req, res) => {
-  if (req.session.role !== 'admin')
-    return res.status(403).json({ message: 'لا تملك صلاحية' });
+  if (req.session.role !== 'admin') return res.status(403).json({ message: 'ليس لديك صلاحية' });
 
   const { status } = req.body;
-  const valid = ['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ', 'مرفوض'];
-  if (!valid.includes(status))
-    return res.status(400).json({ message: 'حالة غير صالحة' });
+  const id = req.params.id;
+  const validStatuses = ['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ', 'مرفوض'];
+
+  if (!validStatuses.includes(status)) return res.status(400).json({ message: 'حالة غير صالحة' });
 
   try {
-    const result = await pool.query('UPDATE orders SET status=$1 WHERE id=$2 RETURNING *', [status, req.params.id]);
-    if (result.rowCount === 0)
-      return res.status(404).json({ message: 'الطلب غير موجود' });
+    const result = await pool.query('UPDATE orders SET status=$1 WHERE id=$2 RETURNING *', [status, id]);
+    if (result.rowCount === 0) return res.status(404).json({ message: 'الطلب غير موجود' });
 
-    await sendDiscordLog(`📝 تم تغيير حالة الطلب ${req.params.id} إلى ${status}`);
+    await sendDiscordLog(`✅ تم تحديث حالة الطلب (ID: ${id}) إلى "${status}" بواسطة ${req.session.username}`);
     res.json({ message: 'تم التحديث بنجاح' });
   } catch (err) {
-    res.status(500).json({ message: 'خطأ في التحديث' });
+    res.status(500).json({ message: 'خطأ أثناء التحديث' });
   }
 });
 
-// ✅ حذف الطلب
+// حذف الطلب
 app.delete('/order/:id', requireAuth, async (req, res) => {
-  if (req.session.role !== 'admin')
-    return res.status(403).json({ message: 'لا تملك صلاحية' });
+  if (req.session.role !== 'admin') return res.status(403).json({ message: 'ليس لديك صلاحية' });
 
+  const id = req.params.id;
   try {
-    const result = await pool.query('DELETE FROM orders WHERE id=$1', [req.params.id]);
-    if (result.rowCount === 0)
-      return res.status(404).json({ message: 'الطلب غير موجود' });
+    const result = await pool.query('DELETE FROM orders WHERE id=$1', [id]);
+    if (result.rowCount === 0) return res.status(404).json({ message: 'الطلب غير موجود' });
 
-    await sendDiscordLog(`🗑️ تم حذف الطلب ${req.params.id}`);
+    await sendDiscordLog(`🗑️ تم حذف الطلب (ID: ${id}) بواسطة ${req.session.username}`);
     res.json({ message: 'تم الحذف بنجاح' });
   } catch (err) {
-    res.status(500).json({ message: 'فشل الحذف' });
+    res.status(500).json({ message: 'خطأ أثناء الحذف' });
   }
 });
 
-// ✅ تشغيل السيرفر
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
+// ✅ استعلام عن الطلب (tak.js)
+app.post('/api/track', async (req, res) => {
+  const { name, phone, code } = req.body;
+
+  if (!name || !phone || !code) {
+    return res.json({ status: 'error', message: '⚠️ الرجاء إدخال جميع الحقول المطلوبة' });
+  }
+
+  try {
+    const query = `
+      SELECT * FROM orders
+      WHERE name = $1 AND phone = $2 AND order_code = $3
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    const result = await pool.query(query, [name, phone, code]);
+
+    if (result.rowCount === 0) {
+      return res.json({ status: 'error', message: '❌ لم يتم العثور على طلب بهذه البيانات' });
+    }
+
+    const order = result.rows[0];
+    const createdAt = new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' });
+
+    const msg = `📦 تفاصيل الطلب:\n• الاسم: ${order.name}\n• الجوال: ${order.phone}\n• الجهاز: ${order.device}\n• السعر نقداً: ${order.cash_price} ريال\n• السعر تقسيط: ${order.installment_price} ريال\n• كود الطلب: ${order.order_code}\n• الحالة: ${order.status}\n• تاريخ الطلب: ${createdAt}`;
+
+    res.json({ status: 'success', message: msg });
+  } catch (err) {
+    console.error('Error in /api/track:', err);
+    res.json({ status: 'error', message: '❌ حدث خطأ أثناء البحث عن الطلب' });
+  }
 });
+
+app.listen(port, () => console.log(`🚀 السيرفر يعمل على المنفذ ${port}`));
