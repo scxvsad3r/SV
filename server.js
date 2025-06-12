@@ -1,4 +1,6 @@
+عند تحديث الحالة يقول فشل تحديدث الحالة
 
+// server.js
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
@@ -145,7 +147,7 @@ app.post('/login', async (req, res) => {
 
   const users = {
     'admin': { password: 'dev2008', name: 'سامر عبدالله' },
-    'mod':   { password: 'mod2004', name: 'عبدالرحمن خالد' }
+    'mod':   { password: 'mod2004', name: 'عبد الرحمن خالد' }
   };
 
   if (users[username] && users[username].password === password) {
@@ -377,4 +379,4 @@ app.delete('/order/:id', requireAuth, async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-});
+});d
