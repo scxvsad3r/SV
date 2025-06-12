@@ -145,7 +145,7 @@ app.post('/login', async (req, res) => {
 
   const users = {
     'admin': { password: 'dev2008', name: 'سامر عبدالله' },
-    'mod':   { password: 'mod2004', name: 'عبد الرحمن خالد' }
+    'mod':   { password: 'mod2004', name: 'عبدالرحمن خالد' }
   };
 
   if (users[username] && users[username].password === password) {
