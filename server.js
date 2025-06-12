@@ -165,8 +165,6 @@ app.put('/order/:id/status', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
   const { status } = req.body;
 
-  console.log("🔄 طلب تحديث الحالة:", { id, status });
-
   const validStatuses = ['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ', 'مرفوض'];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: 'حالة غير صحيحة' });
@@ -196,5 +194,5 @@ app.put('/order/:id/status', requireAuth, async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});q
+  console.log(`✅ Server running on http://localhost:${port}`);
+});
