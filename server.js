@@ -382,6 +382,3 @@ app.delete('/order/:id', requireAuth, async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
-اول م أحط تم التنفيذ عل اي عميل الرسالة تكون جهازة الـ واتساب الأعمال 
-
-جيت هي
