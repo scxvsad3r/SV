@@ -220,7 +220,7 @@ app.get('/admin', requireAuth, async (req, res) => {
         <td>${order.monthly}</td>
         <td>${order.order_code}</td>
         <td>
-          <select onchange="${req.session.role === 'admin' ? `handleStatusChange(${order.id}, this.value, '${order.phone}', '${order.name}', '${order.device}')` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
+        <select onchange="${req.session.role === 'admin' ? `handleStatusChange(${order.id}, this)` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
             <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
             <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
             <option value="تم التنفيذ"    ${order.status === 'تم التنفيذ'    ? 'selected' : ''}>تم التنفيذ</option>
@@ -255,40 +255,37 @@ app.get('/admin', requireAuth, async (req, res) => {
             a.logout { color: #6a0dad; text-decoration: none; font-weight: bold; }
             a.logout:hover { text-decoration: underline; }
           </style>
-          <script>
-            async function handleStatusChange(id, status, phone, name, device) {
-              if (status === 'تم التنفيذ') {
-                try {
-                  const res = await fetch('/order/' + id + '/status', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status })
-                  });
-                  const data = await res.json();
-                  alert(data.message);
+      <script>
+  async function handleStatusChange(id, select) {
+    const status = select.value;
 
-                  if (res.ok) {
-                    const message = \`عميلنا العزيز \${name}، تم استلام طلبك لتمويل تقسيط \${device} عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية.\`;
-                    const whatsappUrl = \`https://wa.me/\${phone}?text=\${encodeURIComponent(message)}\`;
-                    window.open(whatsappUrl, '_blank');
-                  }
-                } catch (e) {
-                  alert('حدث خطأ أثناء تحديث الحالة');
-                }
-              } else {
-                try {
-                  const res = await fetch('/order/' + id + '/status', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status })
-                  });
-                  const data = await res.json();
-                  alert(data.message);
-                } catch (e) {
-                  alert('حدث خطأ أثناء تحديث الحالة');
-                }
-              }
-            }
+    if (status === 'تم التنفيذ') {
+      // استخراج رقم الجوال من الصف
+      const phone = select.parentElement.parentElement.children[1].textContent.trim();
+
+      // نص الرسالة
+      const message = encodeURIComponent("عميلنا العزيز، تم استلام طلبك لتمويل تقسيط الجوال عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية");
+
+      // فتح واتساب
+      window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+
+      // إعادة تعيين الاختيار إلى السابق
+      select.value = 'قيد المراجعة';
+    } else {
+      // تنفيذ التحديث المعتاد
+      try {
+        const res = await fetch('/order/' + id + '/status', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+        const data = await res.json();
+        alert(data.message);
+      } catch (e) {
+        alert('حدث خطأ أثناء تحديث الحالة');
+      }
+    }
+  }
 
             async function deleteOrder(id) {
               if (!confirm('هل أنت متأكد من حذف الطلب؟')) return;
