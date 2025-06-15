@@ -1,4 +1,3 @@
-كيف أزيل علمت + 
 
 // server.js
 const express = require('express');
