@@ -1,4 +1,3 @@
-
 // server.js
 const express = require('express');
 const session = require('express-session');
@@ -315,4 +314,4 @@ app.put('/order/:id/status', requireAuth, async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-});q
+});
