@@ -38,6 +38,7 @@ app.use(session({
   cookie: { secure: false, httpOnly: true }
 }));
 
+// صفحة تسجيل الدخول
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -69,6 +70,7 @@ app.get('/login', (req, res) => {
   `);
 });
 
+// تحقق من تسجيل الدخول
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'admin' && password === 'dev2008') {
@@ -80,19 +82,21 @@ app.post('/login', (req, res) => {
   }
 });
 
+// تسجيل خروج
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
   });
 });
 
+// صفحة لوحة التحكم
 app.get('/admin', async (req, res) => {
   if (!req.session.authenticated) return res.redirect('/login');
-  
+
   try {
     let result;
     const searchQuery = req.query.q;
-    
+
     if (searchQuery) {
       const search = `%${searchQuery}%`;
       result = await pool.query(`
@@ -103,7 +107,7 @@ app.get('/admin', async (req, res) => {
     } else {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     }
-    
+
     const rows = result.rows.map(order => `
       <tr>
         <td>${order.name}</td>
@@ -127,7 +131,7 @@ app.get('/admin', async (req, res) => {
         </td>
       </tr>
     `).join('');
-    
+
     res.send(`
       <html lang="ar" dir="rtl">
         <head>
@@ -182,13 +186,38 @@ app.get('/admin', async (req, res) => {
             }
 
             function updateStatus(id, status) {
-              fetch('/api/status/' + id, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
-              }).then(res => {
-                if (!res.ok) alert('فشل في تحديث الحالة');
-              });
+              if (status === 'قيد التنفيذ') {
+                fetch('/api/get-order/' + id)
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.success) {
+                      const name = encodeURIComponent(data.order.name);
+                      const code = encodeURIComponent(data.order.order_code);
+                      let phone = data.order.phone;
+
+                      if (phone.startsWith('0')) {
+                        phone = '966' + phone.slice(1);
+                      } else if (phone.startsWith('5')) {
+                        phone = '966' + phone;
+                      }
+
+                      const message = \`مرحبًا \${data.order.name}، طلبك تحت المعالجة ✅\\nرقم الطلب: \${data.order.order_code}\\nسيتم التواصل معك قريبًا.\`;
+                      const url = \`https://wa.me/\${phone}?text=\${encodeURIComponent(message)}\`;
+                      window.open(url, '_blank');
+                    } else {
+                      alert('فشل في جلب بيانات الطلب');
+                    }
+                  });
+              } else {
+                fetch('/api/status/' + id, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status })
+                }).then(res => {
+                  if (!res.ok) alert('فشل في تحديث الحالة');
+                  else location.reload();
+                });
+              }
             }
           </script>
         </body>
@@ -200,27 +229,26 @@ app.get('/admin', async (req, res) => {
   }
 });
 
+// إضافة طلب
 app.post('/api/order', async (req, res) => {
   const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
-  
+
   if (!name || !phone || !device || !code || phone.length < 8 || name.length < 2) {
     return res.status(400).json({ error: 'البيانات المدخلة غير صحيحة' });
   }
-  
+
   try {
-    const existing = await pool.query(`
-      SELECT * FROM orders WHERE phone = $1 AND order_code = $2
-    `, [phone, code]);
-    
+    const existing = await pool.query('SELECT * FROM orders WHERE phone = $1 AND order_code = $2', [phone, code]);
+
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'تم تقديم هذا الطلب مسبقًا' });
     }
-    
+
     await pool.query(`
       INSERT INTO orders (name, phone, device, cash_price, installment_price, monthly, order_code)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [name, phone, device, cashPrice, installmentPrice, monthly, code]);
-    
+
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Database error:', err);
@@ -228,6 +256,7 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
+// حذف طلب
 app.delete('/api/delete/:id', async (req, res) => {
   const id = req.params.id;
   try {
@@ -239,6 +268,7 @@ app.delete('/api/delete/:id', async (req, res) => {
   }
 });
 
+// تحديث الحالة (للحالات غير "قيد التنفيذ")
 app.put('/api/status/:id', async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
@@ -251,6 +281,21 @@ app.put('/api/status/:id', async (req, res) => {
   }
 });
 
+// API لجلب بيانات الطلب
+app.get('/api/get-order/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    const result = await pool.query('SELECT name, phone, order_code FROM orders WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'لم يتم العثور على الطلب' });
+
+    res.json({ success: true, order: result.rows[0] });
+  } catch (err) {
+    console.error('Error fetching order:', err);
+    res.status(500).json({ success: false, error: 'فشل في جلب البيانات' });
+  }
+});
+
+// بدء السيرفر
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
