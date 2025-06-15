@@ -1,3 +1,5 @@
+كيف أزيل علمت + 
+
 // server.js
 const express = require('express');
 const session = require('express-session');
@@ -263,7 +265,7 @@ app.get('/admin', requireAuth, async (req, res) => {
             if (status === 'تم التنفيذ') {
               const message = \`مرحباً \${name}، تم تنفيذ طلبك بنجاح. شكراً لتعاملك معنا في 4 STORE!\`;
               const encodedMessage = encodeURIComponent(message);
-              const whatsappUrl = `https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${encodedMessage}`;
+              const whatsappUrl = \`https://wa.me/\${phone.replace(/[0-9]/g, '')}?text=\${encodedMessage}\`;
               window.open(whatsappUrl, '_blank');
 
               // إعادة تعيين السلكت إلى "قيد التنفيذ" (الحالة السابقة)
@@ -314,4 +316,4 @@ app.put('/order/:id/status', requireAuth, async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-});
+});q
