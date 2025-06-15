@@ -1,3 +1,4 @@
+
 // server.js
 const express = require('express');
 const session = require('express-session');
@@ -9,8 +10,10 @@ const fetch = require('node-fetch');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// رابط ويب هوك ديسكورد (غيرّه إلى الرابط حقك)
 const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1382169050129502308/vvhIvYwXpnuumokS93llkK9rcIlGtZYFxXC2ckqhW-4-lfNKZuNcRTHHPxKyPf4F0Kc2';
 
+// دالة لإرسال لوق نصي بسيط
 async function sendDiscordLog(message) {
   try {
     await fetch(DISCORD_WEBHOOK_URL, {
@@ -23,11 +26,13 @@ async function sendDiscordLog(message) {
   }
 }
 
+// إعداد اتصال قاعدة البيانات
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
+// إنشاء جدول الطلبات إذا لم يكن موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -43,6 +48,7 @@ pool.query(`
   )
 `).catch(err => console.error('Error creating table:', err));
 
+// وسطاء
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -53,13 +59,27 @@ app.use(session({
   saveUninitialized: true,
   cookie: { secure: false, httpOnly: true }
 }));
+// --- بعد app.use(session(...)) ---
 
+// مسار استقبال الطلب الجديد من الـ frontend
 app.post('/api/order', async (req, res) => {
   try {
-    const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
+    const {
+      name,
+      phone,
+      device,
+      cashPrice,
+      installmentPrice,
+      monthly,
+      code  // هذا هو order_code
+    } = req.body;
+
+    // تحقق سريع من البيانات
     if (!name || !phone || !device || !cashPrice || !installmentPrice || !monthly || !code) {
       return res.status(400).json({ message: 'بيانات الطلب غير كاملة' });
     }
+
+    // إدخال الطلب في جدول orders
     const insertQuery = `
       INSERT INTO orders
         (name, phone, device, cash_price, installment_price, monthly, order_code)
@@ -67,9 +87,11 @@ app.post('/api/order', async (req, res) => {
       RETURNING id, created_at
     `;
     const values = [name, phone, device, cashPrice, installmentPrice, monthly, code];
+
     const result = await pool.query(insertQuery, values);
     const order = result.rows[0];
 
+    // إرسال لوج إلى ديسكورد
     await sendDiscordLog(`📦 طلب جديد  
 • الاسم: **${name}**  
 • جوال: **${phone}**  
@@ -77,6 +99,7 @@ app.post('/api/order', async (req, res) => {
 • كود الطلب: **${code}**  
 • الوقت: ${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}`);
 
+    // إرجاع نجاح
     res.status(201).json({ message: 'تم استلام الطلب بنجاح', orderId: order.id });
   } catch (err) {
     console.error('Error in /api/order:', err);
@@ -84,6 +107,8 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
+// --- بعدها تبقى باقي تعريفات المسارات (login, admin, order/:id, الخ.) ---
+// صفحة تسجيل الدخول (GET)
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -115,6 +140,7 @@ app.get('/login', (req, res) => {
   `);
 });
 
+// التحقق من بيانات الدخول (POST)
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -124,15 +150,18 @@ app.post('/login', async (req, res) => {
   };
 
   if (users[username] && users[username].password === password) {
+    // مصادقة ناجحة
     req.session.authenticated = true;
     req.session.username = users[username].name;
     req.session.role = username;
 
+    // إنشاء رسالة الترحيب حسب الدور
     const firstName = users[username].name.split(' ')[0];
     req.session.greeting = username === 'admin'
       ? `مربحاً ${firstName}! 😀`
       : `مرحبا ${firstName}! 👋`;
 
+    // إرسال Embed Log إلى ديسكورد
     const embedLog = {
       embeds: [
         {
@@ -154,11 +183,13 @@ app.post('/login', async (req, res) => {
 
     return res.redirect('/admin');
   } else {
+    // محاولة فاشلة
     await sendDiscordLog(`🚫 محاولة تسجيل دخول فاشلة باسم مستخدم: \`${username}\` في ${new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}`);
     return res.redirect('/login?error=1');
   }
 });
 
+// تسجيل الخروج
 app.get('/logout', async (req, res) => {
   if (req.session.authenticated) {
     await sendDiscordLog(`🔓 تسجيل خروج: **${req.session.username}** (الدور: ${req.session.role}) في ${new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}`);
@@ -168,11 +199,13 @@ app.get('/logout', async (req, res) => {
   });
 });
 
+// حماية المسارات التي تحتاج تسجيل دخول
 function requireAuth(req, res, next) {
   if (req.session.authenticated) return next();
   res.redirect('/login');
 }
 
+// لوحة الإدارة - عرض الطلبات
 app.get('/admin', requireAuth, async (req, res) => {
   try {
     let result;
@@ -188,6 +221,7 @@ app.get('/admin', requireAuth, async (req, res) => {
       result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     }
 
+    // بناء صفوف الجدول
     const rows = result.rows.map(order => `
       <tr>
         <td>${order.name}</td>
@@ -199,77 +233,69 @@ app.get('/admin', requireAuth, async (req, res) => {
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}</td>
         <td>
-          <select id="status-select-${order.id}" onchange="${req.session.role === 'admin' ? `updateStatus(${order.id}, this.value, '${order.phone}', '${order.name}')` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
+          <select onchange="${req.session.role === 'admin' ? `updateStatus(${order.id}, this.value)` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
             <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
             <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
             <option value="تم التنفيذ"    ${order.status === 'تم التنفيذ'    ? 'selected' : ''}>تم التنفيذ</option>
             <option value="مرفوض"        ${order.status === 'مرفوض'        ? 'selected' : ''}>مرفوض</option>
           </select>
         </td>
+        <td>
+          <button onclick="${req.session.role === 'admin' ? `deleteOrder(${order.id})` : `alert('ليس لديك صلاحية لحذف الطلب')`}"
+                  style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;">
+            حذف
+          </button>
+        </td>
       </tr>
     `).join('');
 
+    // قراءة رسالة الترحيب من الجلسة
+    const greeting = req.session.greeting || 'مرحبا بك في لوحة الإدارة!';
+
     res.send(`
       <html lang="ar" dir="rtl">
-      <head>
-        <meta charset="UTF-8" />
-        <title>لوحة الإدارة - 4 STORE</title>
-        <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet" />
-        <style>
-          body { font-family: 'Almarai', sans-serif; background: #fafafa; padding: 20px; }
-          h1 { color: #3b0a77; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-          th { background-color: #6a0dad; color: white; }
-          select { padding: 5px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
-          .logout { float: left; margin-top: -40px; }
-          .search { margin-bottom: 15px; }
-          input[type="search"] { padding: 8px; font-size: 15px; border-radius: 6px; border: 1px solid #ccc; width: 300px; }
-          button { padding: 8px 15px; background: #3b0a77; color: white; border: none; border-radius: 6px; cursor: pointer; }
-          button:hover { background: #5a22a1; }
-        </style>
-      </head>
-      <body>
-        <a class="logout" href="/logout">تسجيل خروج</a>
-        <h1>لوحة الإدارة - مرحباً ${req.session.greeting}</h1>
+        <head>
+          <meta charset="UTF-8" />
+          <title>لوحة إدارة الطلبات</title>
+          <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
+          <style>
+            body { font-family: 'Almarai', sans-serif; margin: 0; padding: 30px; background: #f5f7fa; color: #333; direction: rtl; }
+            h1 { text-align: center; color: #3b0a77; margin-bottom: 10px; }
+            h2 { text-align: center; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1); }
+            th, td { padding: 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
+            th { background-color: #3b0a77; color: white; }
+            button { padding: 5px 10px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; }
+            .logout-link { text-align: center; margin-bottom: 15px; }
+            .logout-link a { color: #3b0a77; text-decoration: none; font-size: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="logout-link"><a href="/logout">تسجيل خروج</a></div>
+          <h1>${greeting}</h1>
+          <h2>لوحة إدارة الطلبات (الدور: ${req.session.role})</h2>
 
-        <form class="search" method="GET" action="/admin">
-          <input type="search" name="q" placeholder="ابحث باسم، جوال أو كود طلب" value="${searchQuery || ''}" />
-          <button type="submit">بحث</button>
-          <button type="button" onclick="window.location='/admin'">عرض الكل</button>
-        </form>
+          <form method="GET" action="/admin" style="text-align:center; margin-bottom: 20px;">
+            <input type="text" name="q" placeholder="بحث باسم، جوال أو كود الطلب"
+                   style="padding: 10px; width: 300px; font-size: 15px;" value="${searchQuery || ''}" />
+            <button type="submit" style="padding: 10px 20px; font-size: 15px; background:#3b0a77; color:#fff; border:none; border-radius:6px;">بحث</button>
+          </form>
 
-        <table>
-          <thead>
-            <tr>
-              <th>الاسم</th>
-              <th>الجوال</th>
-              <th>الجهاز</th>
-              <th>سعر الكاش</th>
-              <th>سعر الأقساط</th>
-              <th>مدة القسط (شهور)</th>
-              <th>كود الطلب</th>
-              <th>وقت الطلب</th>
-              <th>الحالة</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
+          <table>
+            <thead>
+              <tr>
+                <th>الاسم</th><th>رقم الجوال</th><th>الجهاز</th><th>السعر نقداً</th>
+                <th>السعر تقسيط</th><th>شهر</th><th>كود الطلب</th><th>تاريخ الطلب</th>
+                <th>الحالة</th><th>حذف</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
 
-        <script>
-          async function updateStatus(id, status, phone, name) {
-            if (status === 'تم التنفيذ') {
-              const message = \`مرحباً \${name}، تم تنفيذ طلبك بنجاح. شكراً لتعاملك معنا في 4 STORE!\`;
-              const encodedMessage = encodeURIComponent(message);
-              const whatsappUrl = \`https://wa.me/\${phone.replace(/[^0-9]/g, '')}?text=\${encodedMessage}\`;
-              window.open(whatsappUrl, '_blank');
-
-              // إعادة تعيين السلكت إلى "قيد التنفيذ" (الحالة السابقة)
-              document.querySelector('#status-select-' + id).value = 'قيد التنفيذ';
-              return; // لا ترسل تحديث للخادم
-            } else {
+          <script>
+            async function updateStatus(id, status) {
               try {
                 const res = await fetch('/order/' + id + '/status', {
                   method: 'PUT',
@@ -282,33 +308,71 @@ app.get('/admin', requireAuth, async (req, res) => {
                 alert('حدث خطأ أثناء تحديث الحالة');
               }
             }
-          }
-        </script>
-      </body>
+
+            async function deleteOrder(id) {
+              if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
+              try {
+                const res = await fetch('/order/' + id, { method: 'DELETE' });
+                const data = await res.json();
+                alert(data.message);
+                if (res.ok) location.reload();
+              } catch (e) {
+                alert('حدث خطأ أثناء حذف الطلب');
+              }
+            }
+          </script>
+        </body>
       </html>
     `);
-  } catch (err) {
-    console.error('Error loading admin page:', err);
-    res.status(500).send('حدث خطأ في الخادم');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('حدث خطأ في السيرفر');
   }
 });
 
+// تحديث حالة الطلب
 app.put('/order/:id/status', requireAuth, async (req, res) => {
   if (req.session.role !== 'admin') {
-    return res.status(403).json({ message: 'غير مسموح لك بتغيير الحالة' });
+    return res.status(403).json({ message: 'ليس لديك صلاحية لتغيير الحالة' });
   }
-  const { id } = req.params;
+  const id = req.params.id;
   const { status } = req.body;
-  if (!['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ', 'مرفوض'].includes(status)) {
+  const validStatuses = ['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ', 'مرفوض'];
+  if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: 'حالة غير صحيحة' });
   }
   try {
-    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, id]);
-    await sendDiscordLog(`🔄 تم تحديث حالة الطلب رقم ${id} إلى: ${status} بواسطة ${req.session.username}`);
-    res.json({ message: 'تم تحديث الحالة بنجاح' });
+    const result = await pool.query(
+      'UPDATE orders SET status=$1 WHERE id=$2 RETURNING *',
+      [status, id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'الطلب غير موجود' });
+    }
+    await sendDiscordLog(`✅ تم تحديث حالة الطلب (ID: ${id}) إلى "${status}" بواسطة ${req.session.username}`);
+    res.json({ message: 'تم تحديث حالة الطلب بنجاح' });
   } catch (err) {
-    console.error('Error updating status:', err);
-    res.status(500).json({ message: 'حدث خطأ أثناء تحديث الحالة' });
+    console.error(err);
+    res.status(500).json({ message: 'خطأ في تحديث الحالة' });
+  }
+});
+
+// حذف الطلب
+app.delete('/order/:id', requireAuth, async (req, res) => {
+  if (req.session.role !== 'admin') {
+    return res.status(403).json({ message: 'ليس لديك صلاحية لحذف الطلب' });
+  }
+  const id = req.params.id;
+  try {
+    const result = await pool.query('DELETE FROM orders WHERE id=$1', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'الطلب غير موجود' });
+    }
+    await sendDiscordLog(`🗑️ تم حذف الطلب (ID: ${id}) بواسطة ${req.session.username}`);
+    res.json({ message: 'تم حذف الطلب بنجاح' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'خطأ في حذف الطلب' });
   }
 });
 
