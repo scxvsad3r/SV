@@ -120,9 +120,9 @@ app.get('/admin', async (req, res) => {
         <td>${new Date(order.created_at).toLocaleString()}</td>
         <td>
           <select onchange="updateStatus(${order.id}, this.value)">
-            <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
-            <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
-            <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+            <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>>
+        <option value="تم التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+            <option value="قيد التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option
             <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
           </select>
         </td>
@@ -201,7 +201,7 @@ app.get('/admin', async (req, res) => {
                         phone = '966' + phone;
                       }
 
-                      const message = \`مرحبًا \${data.order.name}، طلبك تحت المعالجة ✅\\nرقم الطلب: \${data.order.order_code}\\nسيتم التواصل معك قريبًا.\`;
+                      const message = \`مرحبًا \${data.order.name}، تم تنفيذ الطلب  ✅\\nرقم الطلب: \${data.order.order_code}\\n.عميلنا العزيز، تم استلام طلبك لتمويل تقسيط الجوال عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية\`;
                       const url = \`https://wa.me/\${phone}?text=\${encodeURIComponent(message)}\`;
                       window.open(url, '_blank');
                     } else {
