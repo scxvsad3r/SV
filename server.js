@@ -9,10 +9,8 @@ const fetch = require('node-fetch');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// رابط ويب هوك ديسكورد (غيرّه إلى الرابط حقك)
 const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1382169050129502308/vvhIvYwXpnuumokS93llkK9rcIlGtZYFxXC2ckqhW-4-lfNKZuNcRTHHPxKyPf4F0Kc2';
 
-// دالة لإرسال لوق نصي بسيط
 async function sendDiscordLog(message) {
   try {
     await fetch(DISCORD_WEBHOOK_URL, {
@@ -25,13 +23,11 @@ async function sendDiscordLog(message) {
   }
 }
 
-// إعداد اتصال قاعدة البيانات
 const pool = new Pool({
   connectionString: 'postgresql://postgres:ZhuZBHzJYgVhabsZuiMtColWRqCoiybU@turntable.proxy.rlwy.net:27311/railway',
   ssl: { rejectUnauthorized: false }
 });
 
-// إنشاء جدول الطلبات إذا لم يكن موجود
 pool.query(`
   CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
@@ -47,7 +43,6 @@ pool.query(`
   )
 `).catch(err => console.error('Error creating table:', err));
 
-// وسطاء
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -59,18 +54,9 @@ app.use(session({
   cookie: { secure: false, httpOnly: true }
 }));
 
-// مسار استقبال الطلب الجديد من الـ frontend
 app.post('/api/order', async (req, res) => {
   try {
-    const {
-      name,
-      phone,
-      device,
-      cashPrice,
-      installmentPrice,
-      monthly,
-      code  // هذا هو order_code
-    } = req.body;
+    const { name, phone, device, cashPrice, installmentPrice, monthly, code } = req.body;
 
     if (!name || !phone || !device || !cashPrice || !installmentPrice || !monthly || !code) {
       return res.status(400).json({ message: 'بيانات الطلب غير كاملة' });
@@ -101,7 +87,6 @@ app.post('/api/order', async (req, res) => {
   }
 });
 
-// صفحة تسجيل الدخول (GET)
 app.get('/login', (req, res) => {
   res.send(`
     <html lang="ar" dir="rtl">
@@ -133,10 +118,8 @@ app.get('/login', (req, res) => {
   `);
 });
 
-// التحقق من بيانات الدخول (POST)
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
   const users = {
     'admin': { password: 'dev2008', name: 'سامر عبدالله' },
     'mod':   { password: 'mod2001', name: 'عبدالرحمن خالد' }
@@ -146,30 +129,28 @@ app.post('/login', async (req, res) => {
     req.session.authenticated = true;
     req.session.username = users[username].name;
     req.session.role = username;
-
     const firstName = users[username].name.split(' ')[0];
     req.session.greeting = username === 'admin'
       ? `مربحاً ${firstName}! 😀`
       : `مرحبا ${firstName}! 👋`;
 
     const embedLog = {
-      embeds: [
-        {
-          title: "🔐 تسجيل دخول جديد",
-          color: 0x6A0DAD,
-          fields: [
-            { name: "المستخدم", value: users[username].name, inline: true },
-            { name: "الدور", value: username === 'admin' ? 'مشرف رئيسي' : 'مراقب', inline: true },
-            { name: "الوقت", value: new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' }), inline: false }
-          ]
-        }
-      ]
+      embeds: [{
+        title: "🔐 تسجيل دخول جديد",
+        color: 0x6A0DAD,
+        fields: [
+          { name: "المستخدم", value: users[username].name, inline: true },
+          { name: "الدور", value: username === 'admin' ? 'مشرف رئيسي' : 'مراقب', inline: true },
+          { name: "الوقت", value: new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' }) }
+        ]
+      }]
     };
+
     await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(embedLog)
-    }).catch(err => console.error('Failed to send embed log:', err));
+    }).catch(console.error);
 
     return res.redirect('/admin');
   } else {
@@ -178,172 +159,98 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// تسجيل الخروج
 app.get('/logout', async (req, res) => {
   if (req.session.authenticated) {
     await sendDiscordLog(`🔓 تسجيل خروج: **${req.session.username}** (الدور: ${req.session.role}) في ${new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}`);
   }
-  req.session.destroy(() => {
-    res.redirect('/login');
-  });
+  req.session.destroy(() => res.redirect('/login'));
 });
 
-// حماية المسارات التي تحتاج تسجيل دخول
 function requireAuth(req, res, next) {
   if (req.session.authenticated) return next();
   res.redirect('/login');
 }
 
-// لوحة الإدارة - عرض الطلبات
 app.get('/admin', requireAuth, async (req, res) => {
-  try {
-    let result;
-    const searchQuery = req.query.q;
-    if (searchQuery) {
-      const search = `%${searchQuery}%`;
-      result = await pool.query(`
-        SELECT * FROM orders
-        WHERE name ILIKE $1 OR phone ILIKE $1 OR order_code ILIKE $1
-        ORDER BY created_at DESC
-      `, [search]);
-    } else {
-      result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-    }
+  const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+  const rows = result.rows.map(order => `
+    <tr>
+      <td>${order.name}</td>
+      <td>${order.phone}</td>
+      <td>${order.device}</td>
+      <td>${order.cash_price}</td>
+      <td>${order.installment_price}</td>
+      <td>${order.monthly}</td>
+      <td>${order.order_code}</td>
+      <td>
+        <select onchange="${req.session.role === 'admin' ? `handleStatusChange(${order.id}, this.value, '${order.phone}', '${order.name}', '${order.device}')` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
+          <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
+          <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
+          <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+          <option value="مرفوض" ${order.status === 'مرفوض' ? 'selected' : ''}>مرفوض</option>
+        </select>
+      </td>
+      <td><button onclick="deleteOrder(${order.id})">حذف</button></td>
+    </tr>
+  `).join('');
 
-    const rows = result.rows.map(order => `
-      <tr>
-        <td>${order.name}</td>
-        <td>${order.phone}</td>
-        <td>${order.device}</td>
-        <td>${order.cash_price}</td>
-        <td>${order.installment_price}</td>
-        <td>${order.monthly}</td>
-        <td>${order.order_code}</td>
-        <td>
-          <select onchange="${req.session.role === 'admin' ? `handleStatusChange(${order.id}, this.value, '${order.phone}', '${order.name}', '${order.device}')` : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
-            <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
-            <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
-            <option value="تم التنفيذ"    ${order.status === 'تم التنفيذ'    ? 'selected' : ''}>تم التنفيذ</option>
-            <option value="مرفوض"        ${order.status === 'مرفوض'        ? 'selected' : ''}>مرفوض</option>
-          </select>
-        </td>
-        <td>
-          <button onclick="deleteOrder(${order.id})" style="background:red;color:white;border:none;padding:5px 10px;border-radius:5px;">حذف</button>
-        </td>
-      </tr>
-    `).join('');
-
-    res.send(`
-      <html lang="ar" dir="rtl">
-        <head>
-          <meta charset="UTF-8" />
-          <title>لوحة الإدارة - 4 STORE</title>
-          <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet" />
-          <style>
-            body { font-family: 'Almarai', sans-serif; background: #f6f6f6; margin: 0; padding: 20px; }
-            header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-            h1 { color: #6a0dad; }
-            .greeting { font-weight: bold; }
-            table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-            th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: center; }
-            th { background: #6a0dad; color: white; }
-            select { padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
-            button { cursor: pointer; }
-            form { margin-bottom: 15px; }
-            input[type="search"] { padding: 7px; border-radius: 5px; border: 1px solid #ccc; width: 250px; }
-            nav { margin-top: 15px; }
-            a.logout { color: #6a0dad; text-decoration: none; font-weight: bold; }
-            a.logout:hover { text-decoration: underline; }
-          </style>
-          <script>
-            async function handleStatusChange(id, status, phone, name, device) {
-              if (status === 'تم التنفيذ') {
-                try {
-                  const res = await fetch('/order/' + id + '/status', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status })
-                  });
-                  const data = await res.json();
-                  alert(data.message);
-
-                  if (res.ok) {
-                    const message = \`عميلنا العزيز \${name}، تم استلام طلبك لتمويل تقسيط \${device} عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية.\`;
-                    const whatsappUrl = \`https://wa.me/\${phone}?text=\${encodeURIComponent(message)}\`;
-                    window.open(whatsappUrl, '_blank');
-                  }
-                } catch (e) {
-                  alert('حدث خطأ أثناء تحديث الحالة');
-                }
-              } else {
-                try {
-                  const res = await fetch('/order/' + id + '/status', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status })
-                  });
-                  const data = await res.json();
-                  alert(data.message);
-                } catch (e) {
-                  alert('حدث خطأ أثناء تحديث الحالة');
-                }
-              }
-            }
-
-            async function deleteOrder(id) {
-              if (!confirm('هل أنت متأكد من حذف الطلب؟')) return;
+  res.send(`
+    <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8" />
+        <title>لوحة الإدارة - 4 STORE</title>
+        <style>
+          body { font-family: 'Almarai', sans-serif; }
+          select, button { padding: 5px; }
+        </style>
+        <script>
+          async function handleStatusChange(id, status, phone, name, device) {
+            if (status === 'تم التنفيذ') {
+              const message = \`عميلنا العزيز \${name}، تم استلام طلبك لتمويل تقسيط \${device} عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية.\`;
+              const whatsappUrl = \`https://wa.me/\${phone}?text=\${encodeURIComponent(message)}\`;
+              window.open(whatsappUrl, '_blank');
+              alert('تم فتح واتساب برسالة جاهزة للعميل. لم يتم تحديث حالة الطلب.');
+            } else {
               try {
-                const res = await fetch('/order/' + id, { method: 'DELETE' });
+                const res = await fetch('/order/' + id + '/status', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status })
+                });
                 const data = await res.json();
                 alert(data.message);
-                if (res.ok) location.reload();
-              } catch {
-                alert('حدث خطأ أثناء الحذف');
+              } catch (e) {
+                alert('حدث خطأ أثناء تحديث الحالة');
               }
             }
-          </script>
-        </head>
-        <body>
-          <header>
-            <h1>لوحة الإدارة - 4 STORE</h1>
-            <div class="greeting">${req.session.greeting}</div>
-            <a href="/logout" class="logout">تسجيل خروج</a>
-          </header>
-          <form method="GET" action="/admin" style="margin-bottom: 15px;">
-            <input type="search" name="q" placeholder="ابحث بالاسم أو الجوال أو كود الطلب" value="${req.query.q || ''}" />
-            <button type="submit">بحث</button>
-          </form>
-          <table>
-            <thead>
-              <tr>
-                <th>الاسم</th>
-                <th>الجوال</th>
-                <th>الجهاز</th>
-                <th>سعر الكاش</th>
-                <th>سعر التقسيط</th>
-                <th>شهري</th>
-                <th>كود الطلب</th>
-                <th>الحالة</th>
-                <th>حذف</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
-          <nav>
-            <p>موقع 4STORE &copy; 2025</p>
-          </nav>
-        </body>
-      </html>
-    `);
-  } catch (err) {
-    console.error('Error loading admin page:', err);
-    res.status(500).send('خطأ في تحميل لوحة الإدارة');
-  }
+          }
+
+          async function deleteOrder(id) {
+            if (!confirm('هل أنت متأكد من حذف الطلب؟')) return;
+            const res = await fetch('/order/' + id, { method: 'DELETE' });
+            const data = await res.json();
+            alert(data.message);
+            if (res.ok) location.reload();
+          }
+        </script>
+      </head>
+      <body>
+        <h1>لوحة الإدارة</h1>
+        <table border="1">
+          <thead>
+            <tr>
+              <th>الاسم</th><th>الجوال</th><th>الجهاز</th><th>سعر كاش</th><th>سعر تقسيط</th><th>شهري</th><th>كود</th><th>الحالة</th><th>حذف</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `);
 });
 
-// تحديث حالة الطلب
 app.put('/order/:id/status', requireAuth, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
@@ -354,17 +261,13 @@ app.put('/order/:id/status', requireAuth, async (req, res) => {
 
   try {
     const result = await pool.query('UPDATE orders SET status = $1 WHERE id = $2 RETURNING *', [status, id]);
-
     if (result.rowCount === 0) return res.status(404).json({ message: 'الطلب غير موجود' });
-
     res.json({ message: 'تم تحديث حالة الطلب بنجاح' });
   } catch (err) {
-    console.error('Error updating status:', err);
     res.status(500).json({ message: 'خطأ في تحديث الحالة' });
   }
 });
 
-// حذف طلب
 app.delete('/order/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
@@ -372,12 +275,10 @@ app.delete('/order/:id', requireAuth, async (req, res) => {
     if (result.rowCount === 0) return res.status(404).json({ message: 'الطلب غير موجود' });
     res.json({ message: 'تم حذف الطلب بنجاح' });
   } catch (err) {
-    console.error('Error deleting order:', err);
     res.status(500).json({ message: 'خطأ في حذف الطلب' });
   }
 });
 
-// صفحة 404
 app.use((req, res) => {
   res.status(404).send('صفحة غير موجودة');
 });
