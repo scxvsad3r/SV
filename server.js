@@ -10,7 +10,9 @@ const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 3000;
-
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 // رابط ويب هوك ديسكورد (غيرّه إلى رابطك)
 const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1384119260065824830/sC9L05k6gYr901RAzhAT2c6HWbtjE9X6D1UqucqyWFSFIltPZUhIHCmDdyINAfAHkh8c';
 
