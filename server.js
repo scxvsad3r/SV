@@ -1,4 +1,3 @@
-
 // server.js
 const express = require('express');
 const session = require('express-session');
@@ -179,6 +178,11 @@ function requireAuth(req, res, next) {
   res.redirect('/login');
 }
 
+// دالة لتطهير نص للاستخدام داخل HTML/JS (لتفادي مشاكل الاقتباس)
+function escapeForJs(str) {
+  return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+}
+
 // لوحة الإدارة
 app.get('/admin', requireAuth, async (req, res) => {
   try {
@@ -191,128 +195,143 @@ app.get('/admin', requireAuth, async (req, res) => {
         [search]
       );
     } else {
-      result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+      result = await pool.query(`SELECT * FROM orders ORDER BY created_at DESC LIMIT 100`);
     }
 
-    const rows = result.rows.map(order => `
-      <tr>
-        <td>${order.name}</td><td>${order.phone}</td><td>${order.device}</td>
-        <td>${order.cash_price}</td><td>${order.installment_price}</td><td>${order.monthly}</td>
-        <td>${order.order_code}</td>
-        <td>${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}</td>
-        <td>
-          <select onchange="${req.session.role === 'admin'
-            ? `updateStatus(${order.id}, this.value)`
-            : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
-            <option value="قيد المراجعة" ${order.status==='قيد المراجعة'?'selected':''}>قيد المراجعة</option>
-            <option value="قيد التنفيذ" ${order.status==='قيد التنفيذ'?'selected':''}>قيد التنفيذ</option>
-            <option value="تم التنفيذ"    ${order.status==='تم التنفيذ'   ?'selected':''}>تم التنفيذ</option>
-            <option value="مرفوض"        ${order.status==='مرفوض'       ?'selected':''}>مرفوض</option>
-          </select>
-        </td>
-        <td>
-          <button onclick="${req.session.role==='admin'
-            ? `deleteOrder(${order.id})`
-            : `alert('ليس لديك صلاحية لحذف الطلب')`}"
-            style="background:red;color:white;border:none;padding:5px 10px;border-radius:5px;">
-            حذف
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    const orders = result.rows;
 
-    const greeting = req.session.greeting || 'مرحبا بك في لوحة الإدارة!';
+    // HTML صفحة الادمن مع جدول الطلبات وزر تغيير الحالة
     res.send(`
-      <html lang="ar" dir="rtl">
-        <head><meta charset="UTF-8"><title>لوحة إدارة الطلبات</title>
-        <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet">
-        <style>
-          body { font-family: 'Almarai', sans-serif; margin:0; padding:30px; background:#f5f7fa; color:#333; direction:rtl; }
-          h1, h2 { text-align:center; color:#3b0a77; }
-          table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; box-shadow:0 5px 20px rgba(0,0,0,0.1); }
-          th, td { padding:15px; text-align:center; border-bottom:1px solid #eee; font-size:15px; }
-          th { background:#3b0a77; color:#fff; }
-          button { padding:5px 10px; font-size:14px; border:none; border-radius:6px; cursor:pointer; }
-          .logout-link { text-align:center; margin-bottom:15px; }
-          .logout-link a { color:#3b0a77; text-decoration:none; font-size:15px; }
-        </style>
-        </head>
-        <body>
-          <div class="logout-link"><a href="/logout">تسجيل خروج</a></div>
-          <h1>${greeting}</h1>
-          <h2>لوحة إدارة الطلبات (الدور: ${req.session.role})</h2>
-          <form method="GET" action="/admin" style="text-align:center; margin-bottom:20px;">
-            <input type="text" name="q" placeholder="بحث باسم، جوال أو كود الطلب"
-                   style="padding:10px; width:300px; font-size:15px;" value="${req.query.q||''}" />
-            <button type="submit" style="padding:10px 20px; font-size:15px; background:#3b0a77; color:#fff; border:none; border-radius:6px;">
-              بحث
-            </button>
-          </form>
-          <table>
-            <thead>
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>لوحة التحكم - 4 STORE</title>
+      <link href="https://fonts.googleapis.com/css2?family=Almarai&display=swap" rel="stylesheet" />
+      <style>
+        body { font-family: 'Almarai', sans-serif; background: #fafafa; margin:0; padding:20px; }
+        h1 { color: #6a0dad; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        th { background: #6a0dad; color: white; }
+        select { padding: 6px; border-radius: 5px; border: 1px solid #ccc; }
+        .logout { float: left; margin-bottom: 15px; }
+        input[type="search"] {
+          padding: 6px;
+          width: 250px;
+          border-radius: 6px;
+          border: 1px solid #aaa;
+          margin-bottom: 10px;
+        }
+      </style>
+    </head>
+    <body>
+      <a href="/logout" class="logout">تسجيل خروج</a>
+      <h1>مرحباً ${req.session.greeting}</h1>
+      <form method="GET" action="/admin">
+        <input type="search" name="q" placeholder="ابحث بالاسم، جوال، كود الطلب..." value="${searchQuery || ''}" />
+        <button type="submit">بحث</button>
+      </form>
+
+      <table>
+        <thead>
+          <tr>
+            <th>الرقم</th>
+            <th>الاسم</th>
+            <th>الجوال</th>
+            <th>الجهاز</th>
+            <th>سعر الكاش</th>
+            <th>السعر بالتقسيط</th>
+            <th>الدفعة الشهرية</th>
+            <th>كود الطلب</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${orders.map(order => {
+            // تطهير القيم لتفادي مشاكل HTML/JS
+            const safeName = escapeForJs(order.name);
+            const safePhone = escapeForJs(order.phone);
+            const safeCode = escapeForJs(order.order_code);
+            return `
               <tr>
-                <th>الاسم</th><th>رقم الجوال</th><th>الجهاز</th><th>السعر نقداً</th>
-                <th>السعر تقسيط</th><th>شهر</th><th>كود الطلب</th><th>تاريخ الطلب</th>
-                <th>الحالة</th><th>حذف</th>
+                <td>${order.id}</td>
+                <td>${order.name}</td>
+                <td>${order.phone}</td>
+                <td>${order.device}</td>
+                <td>${order.cash_price}</td>
+                <td>${order.installment_price}</td>
+                <td>${order.monthly}</td>
+                <td>${order.order_code}</td>
+                <td>
+                  <select onchange="${req.session.role === 'admin' 
+                    ? `updateStatus(${order.id}, this.value, '${safeName}', '${safePhone}', '${safeCode}')`
+                    : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
+                    <option value="قيد المراجعة" ${order.status === 'قيد المراجعة' ? 'selected' : ''}>قيد المراجعة</option>
+                    <option value="قيد التنفيذ" ${order.status === 'قيد التنفيذ' ? 'selected' : ''}>قيد التنفيذ</option>
+                    <option value="تم التنفيذ" ${order.status === 'تم التنفيذ' ? 'selected' : ''}>تم التنفيذ</option>
+                  </select>
+                </td>
               </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-          <script>
-            async function updateStatus(id, status) {
-              try {
-                const res = await fetch('/order/' + id + '/status', {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ status })
-                });
-                const data = await res.json();
-                alert(data.message);
-              } catch {
-                alert('حدث خطأ أثناء تحديث الحالة');
-              }
-            }
-            async function deleteOrder(id) {
-              if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
-              try {
-                const res = await fetch('/order/' + id, { method: 'DELETE' });
-                const data = await res.json();
-                alert(data.message);
-                if (res.ok) location.reload();
-              } catch {
-                alert('حدث خطأ أثناء حذف الطلب');
-              }
-            }
-          </script>
-        </body>
-      </html>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+
+      <script>
+        async function updateStatus(id, status, name, phone, code) {
+          if (status === 'تم التنفيذ') {
+            const message = \`مرحبًا \${name}، تم تنفيذ الطلب ✅\\nرقم الطلب: \${code}\\nعميلنا العزيز، تم استلام طلبك لتمويل تقسيط الجوال عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل برسالة نصية.\`;
+            const phoneFormatted = phone.startsWith('0') ? '966' + phone.slice(1) : phone;
+            const whatsappUrl = \`https://wa.me/\${phoneFormatted}?text=\${encodeURIComponent(message)}\`;
+            window.open(whatsappUrl, '_blank');
+            return; // لا تحدث تعديل في قاعدة البيانات
+          }
+
+          try {
+            const res = await fetch('/order/' + id + '/status', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status })
+            });
+            const data = await res.json();
+            alert(data.message);
+            location.reload();
+          } catch {
+            alert('حدث خطأ أثناء تحديث الحالة');
+          }
+        }
+      </script>
+    </body>
+    </html>
     `);
+
   } catch (err) {
     console.error(err);
-    res.status(500).send('حدث خطأ في السيرفر');
+    res.status(500).send('خطأ في جلب الطلبات');
   }
 });
 
-// تحديث حالة الطلب
+// تحديث حالة الطلب (في قاعدة البيانات)
 app.put('/order/:id/status', requireAuth, async (req, res) => {
   if (req.session.role !== 'admin') {
-    return res.status(403).json({ message: 'ليس لديك صلاحية لتغيير الحالة' });
+    return res.status(403).json({ message: 'غير مصرح لك بتغيير الحالة' });
   }
   const id = req.params.id;
   const { status } = req.body;
-  const validStatuses = ['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ', 'مرفوض'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ message: 'حالة غير صحيحة' });
+
+  if (!['قيد المراجعة', 'قيد التنفيذ', 'تم التنفيذ'].includes(status)) {
+    return res.status(400).json({ message: 'حالة غير صالحة' });
   }
+
   try {
-    const result = await pool.query(
-      'UPDATE orders SET status=$1 WHERE id=$2 RETURNING *',
-      [status, id]
-    );
+    const result = await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'الطلب غير موجود' });
     }
-    await sendDiscordLog(`✅ تم تحديث حالة الطلب (ID: ${id}) إلى "${status}" بواسطة ${req.session.username}`);
+    await sendDiscordLog(`✏️ تم تغيير حالة الطلب رقم #${id} إلى "${status}" بواسطة ${req.session.username}`);
+
     res.json({ message: 'تم تحديث حالة الطلب بنجاح' });
   } catch (err) {
     console.error(err);
@@ -320,52 +339,8 @@ app.put('/order/:id/status', requireAuth, async (req, res) => {
   }
 });
 
-// حذف الطلب
-app.delete('/order/:id', requireAuth, async (req, res) => {
-  if (req.session.role !== 'admin') {
-    return res.status(403).json({ message: 'ليس لديك صلاحية لحذف الطلب' });
-  }
-  const id = req.params.id;
-  try {
-    const result = await pool.query('DELETE FROM orders WHERE id=$1', [id]);
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'الطلب غير موجود' });
-    }
-    await sendDiscordLog(`🗑️ تم حذف الطلب (ID: ${id}) بواسطة ${req.session.username}`);
-    res.json({ message: 'تم حذف الطلب بنجاح' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'خطأ في حذف الطلب' });
-  }
-});
+// صفحة vd.html لطلب العميل (ثابتة ضمن مجلد public)
 
-// استعلام عن حالة الطلب
-app.post('/api/track', async (req, res) => {
-  const { name, phone, code } = req.body;
-  if (!name || !phone || !code) {
-    return res.status(400).json({ message: 'بيانات ناقصة' });
-  }
-  try {
-    const query = `
-      SELECT status, created_at
-      FROM orders
-      WHERE name = $1 AND phone = $2 AND order_code = $3
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    const { rows } = await pool.query(query, [name, phone, code]);
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'لم يُعثر على طلب' });
-    }
-    const { status, created_at } = rows[0];
-    return res.json({ status, created_at });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'خطأ في السيرفر' });
-  }
-});
-
-// تشغيل السيرفر
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
