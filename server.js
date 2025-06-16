@@ -10,9 +10,7 @@ const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+
 // رابط ويب هوك ديسكورد (غيرّه إلى رابطك)
 const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1384119260065824830/sC9L05k6gYr901RAzhAT2c6HWbtjE9X6D1UqucqyWFSFIltPZUhIHCmDdyINAfAHkh8c';
 
@@ -342,16 +340,11 @@ app.delete('/order/:id', requireAuth, async (req, res) => {
 });
 
 // استعلام عن حالة الطلب
-// بدل:
-// const res = await fetch('/api/track', { … });
-// استخدم:
-const API_BASE = 'https://admin-4store.up.railway.app';
-
-const res = await fetch(`${API_BASE}/api/track`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name, phone, code })
-});
+app.post('/api/track', async (req, res) => {
+  const { name, phone, code } = req.body;
+  if (!name || !phone || !code) {
+    return res.status(400).json({ message: 'بيانات ناقصة' });
+  }
   try {
     const query = `
       SELECT status, created_at
