@@ -340,11 +340,16 @@ app.delete('/order/:id', requireAuth, async (req, res) => {
 });
 
 // استعلام عن حالة الطلب
-app.post('/api/track', async (req, res) => {
-  const { name, phone, code } = req.body;
-  if (!name || !phone || !code) {
-    return res.status(400).json({ message: 'بيانات ناقصة' });
-  }
+// بدل:
+// const res = await fetch('/api/track', { … });
+// استخدم:
+const API_BASE = 'https://admin-4store.up.railway.app';
+
+const res = await fetch(`${API_BASE}/api/track`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name, phone, code })
+});
   try {
     const query = `
       SELECT status, created_at
