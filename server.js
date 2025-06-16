@@ -14,7 +14,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // رابط ويب هوك ديسكورد (غيرّه إلى الرابط حقك)
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1382169050129502308/vvhIvYwXpnuumokS93llkK9rcIlGtZYFxXC2ckqhW-4-lfNKZuNcRTHHPxKyPf4F0Kc2';
+const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1384119260065824830/sC9L05k6gYr901RAzhAT2c6HWbtjE9X6D1UqucqyWFSFIltPZUhIHCmDdyINAfAHkh8c';
 
 // دالة لإرسال لوق نصي بسيط
 async function sendDiscordLog(message) {
