@@ -298,7 +298,7 @@ app.get('/admin', requireAuth, async (req, res) => {
 عميلنا العزيز، تم استلام طلبك لتمويل تقسيط الجوال عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية\`;
 
               // تنظيف رقم الجوال للواتساب (يجب أن يكون بالصيغة الدولية بدون +)
-              let waPhone = phone.replace(/[^0-9]/g, '');
+              let waPhone = phone.replace(/[0-9]/g, '');
               const url = \`https://wa.me/\${waPhone}?text=\${encodeURIComponent(message)}\`;
               window.open(url, '_blank');
             }
