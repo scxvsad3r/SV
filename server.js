@@ -200,21 +200,10 @@ app.get('/admin', requireAuth, async (req, res) => {
         <td>${order.cash_price}</td><td>${order.installment_price}</td><td>${order.monthly}</td>
         <td>${order.order_code}</td>
         <td>${new Date(order.created_at).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh' })}</td>
-     <td>
-  <div style="display:flex; flex-direction:column; gap:5px;">
-    <button onclick="${req.session.role==='admin'
-      ? `deleteOrder(${order.id})`
-      : `alert('ليس لديك صلاحية لحذف الطلب')`}"
-      style="background:red;color:white;border:none;padding:5px 10px;border-radius:5px;">
-      حذف
-    </button>
-    <button onclick="openWhatsApp('${order.phone}', '${order.order_code}', '${order.name}')" 
-      style="background:green;color:white;border:none;padding:5px 10px;border-radius:5px;">
-      تم تنفيذ الطلب
-    </button>
-  </div>
-</td>
-<td>
+        <td>
+          <select onchange="${req.session.role === 'admin'
+            ? `updateStatus(${order.id}, this.value)`
+            : `alert('ليس لديك صلاحية لتغيير الحالة')`}">
             <option value="قيد المراجعة" ${order.status==='قيد المراجعة'?'selected':''}>قيد المراجعة</option>
             <option value="قيد التنفيذ" ${order.status==='قيد التنفيذ'?'selected':''}>قيد التنفيذ</option>
             <option value="تم التنفيذ"    ${order.status==='تم التنفيذ'   ?'selected':''}>تم التنفيذ</option>
@@ -294,12 +283,6 @@ app.get('/admin', requireAuth, async (req, res) => {
                 alert('حدث خطأ أثناء حذف الطلب');
               }
             }
-            function openWhatsApp(phone, code, name) {
-  const formattedPhone = phone.replace(/^0/, '966'); // تحويل 05 إلى 9665
-  const message = `مرحبًا ${name}، تم تنفيذ الطلب ✅%0Aرقم الطلب: ${code}%0A.عميلنا العزيز، تم استلام طلبك لتمويل تقسيط الجوال عبر 4Store. لمتابعة الطلب أو استكمال الإجراءات، يرجى زيارة الرابط المرسل رسالة نصية`;
-  const url = `https://wa.me/${formattedPhone}?text=${message}`;
-  window.open(url, '_blank');
-}
           </script>
         </body>
       </html>
