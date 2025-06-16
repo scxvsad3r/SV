@@ -273,7 +273,7 @@ app.get('/admin', requireAuth, async (req, res) => {
               if (status === 'قيد التنفيذ') {
                 const msg = \`مرحبًا \${name}، طلبك رقم \${code} قيد التنفيذ الآن. شكرًا لتعاملكم معنا في 4STORE.\`;
                 window.open(
-                  'https://wa.me/' + phone.replace(/[^0-9]/g, '') +
+                  'https://wa.me/' + phone.replace(/\D/g, ''); +
                   '?text=' + encodeURIComponent(msg),
                   '_blank'
                 );
