@@ -300,12 +300,8 @@ app.get('/admin', requireAuth, async (req, res) => {
     '_blank'
   );
 }
-window.open(
-  'https://wa.me/' + intlPhone +
-                '?text=' + encodeURIComponent(msg),
-                '_blank'
-              );
-            }
+
+
 
             // دالة الحذف
             async function deleteOrder(id) {
