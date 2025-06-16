@@ -221,7 +221,7 @@ app.get('/admin', requireAuth, async (req, res) => {
         </td>
         <td>
           <button onclick="${req.session.role==='admin'
-            ? `markExecuted('${order.phone}', '${order.name}', '${order.order_code}')`
+            ? `markExecuted('${order.phone}')`
             : `alert('ليس لديك صلاحية')`}"
             style="background:green;color:white;border:none;padding:5px 10px;border-radius:5px;">
             تم تنفيذ الطلب
@@ -271,13 +271,13 @@ app.get('/admin', requireAuth, async (req, res) => {
             // عند تغيير الحالة
             function onStatusChange(id, phone, name, code, status, event) {
               if (status === 'قيد التنفيذ') {
-                const msg = `مرحبًا ${name}، طلبك رقم ${code} قيد التنفيذ الآن. شكرًا لتعاملكم معنا في 4STORE.`;
-                const intlPhone = phone.replace(/^0/, '966').replace(/[^0-9]/g, '');
+                const msg = \`مرحبًا \${name}، طلبك رقم \${code} قيد التنفيذ الآن. شكرًا لتعاملكم معنا في 4STORE.\`;
                 window.open(
-                  'https://wa.me/' + intlPhone +
+                  'https://wa.me/' + phone.replace(/[^0-9]/g, '') +
                   '?text=' + encodeURIComponent(msg),
                   '_blank'
                 );
+                // إعادة الاختيار للحالة السابقة
                 event.target.value = 'قيد المراجعة';
               } else {
                 fetch('/order/' + id + '/status', {
@@ -292,11 +292,11 @@ app.get('/admin', requireAuth, async (req, res) => {
             }
 
             // زر "تم تنفيذ الطلب"
-            function markExecuted(phone, name, code) {
-              const msg = `مرحبًا ${name}، تم تنفيذ طلبك رقم ${code} عبر 4STORE. نشكرك على تعاملكم ونتطلع لخدمتكم مجددًا.`;
+            function markExecuted(phone) {
+              const msg = 'عميلنا العزيز، تم استكمال تنفيذ طلبك عبر 4STORE. شكرًا لتعاملكم ونتطلع لخدمتكم دائمًا.';
               const intlPhone = phone.replace(/^0/, '966').replace(/[^0-9]/g, '');
-              window.open(
-                'https://wa.me/' + intlPhone +
+window.open(
+  'https://wa.me/' + intlPhone +
                 '?text=' + encodeURIComponent(msg),
                 '_blank'
               );
