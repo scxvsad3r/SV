@@ -294,8 +294,9 @@ app.get('/admin', requireAuth, async (req, res) => {
             // زر "تم تنفيذ الطلب"
             function markExecuted(phone) {
               const msg = 'عميلنا العزيز، تم استكمال تنفيذ طلبك عبر 4STORE. شكرًا لتعاملكم ونتطلع لخدمتكم دائمًا.';
-              window.open(
-                'https://wa.me/' + phone.replace(/[^0-9]/g, '') +
+              const intlPhone = phone.replace(/^0/, '966').replace(/[^0-9]/g, '');
+window.open(
+  'https://wa.me/' + intlPhone +
                 '?text=' + encodeURIComponent(msg),
                 '_blank'
               );
